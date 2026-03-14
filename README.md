@@ -6,6 +6,11 @@ Implemented venues:
 - Polymarket
 - Kalshi
 
+Additional docs:
+- `SUBMISSION.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DEMO.md`
+
 ## What this MVP demonstrates
 - Fixture-backed ingestion of metadata and quote/order-book-like fields.
 - Canonical event clusters from cross-venue heuristic similarity (event family, token overlap, category, deadline proximity).
