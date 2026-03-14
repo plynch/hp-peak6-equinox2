@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"equinox/internal/adapters/kalshi"
@@ -21,12 +22,16 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: equinox <fixture-demo|live-inspect>")
+		fmt.Println("usage: equinox <fixture-demo|route-order|live-inspect>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
 	case "fixture-demo":
 		if err := runFixtureDemo(); err != nil {
+			panic(err)
+		}
+	case "route-order":
+		if err := runRouteOrder(); err != nil {
 			panic(err)
 		}
 	case "live-inspect":
@@ -39,18 +44,26 @@ func main() {
 	}
 }
 
-func runFixtureDemo() error {
+func loadFixtureState() ([]model.VenueMarketInstance, []model.EventCluster, []model.PropositionCluster, []model.EquivalenceAssessment, error) {
 	pmRows, err := (polymarket.Adapter{}).LoadFixture("testdata/fixtures/polymarket_markets.json")
 	if err != nil {
-		return err
+		return nil, nil, nil, nil, err
 	}
 	kRows, err := (kalshi.Adapter{}).LoadFixture("testdata/fixtures/kalshi_markets.json")
 	if err != nil {
-		return err
+		return nil, nil, nil, nil, err
 	}
 	instances := append(normalize.FromPolymarket(pmRows), normalize.FromKalshi(kRows)...)
 	events := cluster.BuildEventClusters(instances)
 	props, assessments := cluster.BuildPropositionClusters(events)
+	return instances, events, props, assessments, nil
+}
+
+func runFixtureDemo() error {
+	instances, events, props, assessments, err := loadFixtureState()
+	if err != nil {
+		return err
+	}
 
 	orders := []model.HypotheticalOrder{}
 	for _, p := range props {
@@ -75,8 +88,56 @@ func runFixtureDemo() error {
 	if err := artifacts.Write(runDir, artifacts.Bundle{Instances: instances, Events: events, Props: props, Assessments: assessments, Decisions: decisions, Evaluation: eval}); err != nil {
 		return err
 	}
-	fmt.Printf("fixture demo complete\nartifact: %s/bundle.json\n", runDir)
+	fmt.Printf("fixture demo complete\nartifact: %s/bundle.json\n\n", runDir)
+	printFixtureSummary(props, decisions)
 	return nil
+}
+
+func runRouteOrder() error {
+	fs := flag.NewFlagSet("route-order", flag.ExitOnError)
+	clusterID := fs.String("cluster", "", "proposition cluster id to route against (for example prop-001)")
+	side := fs.String("side", "buy_yes", "hypothetical order side: buy_yes or sell_yes")
+	limit := fs.Float64("limit", 0.60, "limit probability")
+	size := fs.Float64("size", 1000, "size notional")
+	_ = fs.Parse(os.Args[2:])
+
+	if *clusterID == "" {
+		return fmt.Errorf("missing required --cluster flag")
+	}
+
+	_, _, props, _, err := loadFixtureState()
+	if err != nil {
+		return err
+	}
+
+	var target *model.PropositionCluster
+	for i := range props {
+		if props[i].ClusterID == *clusterID {
+			target = &props[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("unknown proposition cluster %q", *clusterID)
+	}
+
+	order := model.HypotheticalOrder{
+		OrderID:              "manual-" + *clusterID,
+		PropositionClusterID: *clusterID,
+		Side:                 *side,
+		LimitProbability:     *limit,
+		SizeNotional:         *size,
+	}
+	decision := router.Simulate(order, props)
+	out := map[string]any{
+		"order":      order,
+		"cluster":    target,
+		"decision":   decision,
+		"how_to_read": "routeable clusters can accept buy_yes or sell_yes hypothetical orders; the router rejects clusters that are unsupported, ambiguous, event-only, or outside the order limit",
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(out)
 }
 
 func deriveEvaluationLabels(events []model.EventCluster, props []model.PropositionCluster, assessments []model.EquivalenceAssessment) map[string]string {
@@ -130,6 +191,47 @@ func runLiveInspect() error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
+}
+
+func printFixtureSummary(props []model.PropositionCluster, decisions []model.RoutingDecision) {
+	fmt.Println("routeable proposition clusters:")
+	foundRouteable := false
+	for _, p := range props {
+		if p.Routeability != model.Routeable {
+			continue
+		}
+		foundRouteable = true
+		fmt.Printf("- %s | %s | venues=%s\n", p.ClusterID, p.Proposition, joinVenues(p.MarketInstances))
+	}
+	if !foundRouteable {
+		fmt.Println("- none")
+	}
+
+	fmt.Println("\nexample route-order usage:")
+	for _, p := range props {
+		if p.Routeability == model.Routeable {
+			fmt.Printf("  make route-order CLUSTER=%s SIDE=buy_yes LIMIT=0.60 SIZE=1000\n", p.ClusterID)
+			fmt.Printf("  make route-order CLUSTER=%s SIDE=sell_yes LIMIT=0.55 SIZE=1000\n", p.ClusterID)
+			break
+		}
+	}
+
+	fmt.Println("\ncurrent demo routing outcomes:")
+	for _, d := range decisions {
+		fmt.Printf("- %s | %s | %s\n", d.Order.PropositionClusterID, d.Action, strings.Join(d.Reasons, "; "))
+	}
+}
+
+func joinVenues(instances []model.VenueMarketInstance) string {
+	seen := map[model.Venue]bool{}
+	out := make([]string, 0, len(instances))
+	for _, inst := range instances {
+		if !seen[inst.Venue] {
+			seen[inst.Venue] = true
+			out = append(out, string(inst.Venue))
+		}
+	}
+	return strings.Join(out, ",")
 }
 
 func errText(err error) string {

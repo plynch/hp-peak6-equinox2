@@ -26,14 +26,25 @@ Recommended read order:
 Then run:
 
 ```bash
-go test ./...
-go run ./cmd/equinox fixture-demo
+make dev
+```
+
+To see the supported operator commands:
+
+```bash
+make
 ```
 
 Optional live ingest check:
 
 ```bash
-go run ./cmd/equinox live-inspect --limit 1
+make live-inspect LIVE_LIMIT=1
+```
+
+To route a specific hypothetical order against the fixture state:
+
+```bash
+make route-order
 ```
 
 ## Main Architectural Decisions

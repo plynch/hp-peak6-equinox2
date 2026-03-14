@@ -36,8 +36,13 @@ Still curated in fixtures:
 
 ## Quickstart
 ```bash
-go test ./...
-go run ./cmd/equinox fixture-demo
+make dev
+```
+
+To see the available operator commands:
+
+```bash
+make
 ```
 
 Outputs:
@@ -45,10 +50,44 @@ Outputs:
 - Artifacts: `artifacts/<timestamp>/bundle.json`
 
 ## Commands
+- `make dev`
+  - One-command reviewer setup and demo path.
+- `make`
+  - Prints the supported demo and operator targets.
 - `go run ./cmd/equinox fixture-demo`
   - Deterministic, secret-free reviewer path.
-- `go run ./cmd/equinox live-inspect --limit 3`
+- `make route-order`
+  - Routes the default hypothetical `buy_yes` order against the default fixture cluster `prop-001`.
+- `make route-order SIDE=sell_yes LIMIT=0.55`
+  - Routes a `sell_yes` order against the same fixture cluster.
+- `make live-inspect LIVE_LIMIT=3`
   - Optional public API check for current ingestion viability.
+
+## What Orders Can Be Routed
+- Only proposition clusters marked `routeable` can be routed.
+- The current CLI supports hypothetical `buy_yes` and `sell_yes` orders.
+- Orders must specify:
+  - proposition cluster id
+  - side
+  - limit probability
+  - size notional
+- In the current fixture corpus, the routeable cluster is:
+  - `prop-001`: `fed hike rate march 2026 meeting`
+- The router refuses:
+  - unsupported clusters
+  - ambiguous clusters
+  - event-only clusters
+  - executable quotes that violate the order limit
+
+## How Routing Works
+- `make dev` loads fixture state, normalizes venue records, builds event clusters, then proposition clusters.
+- `make route-order ...` reloads that same fixture state and looks up the requested proposition cluster.
+- For `buy_yes`, the executable price is `yes_ask`, and it must be less than or equal to the order limit.
+- For `sell_yes`, the executable price is `yes_bid`, and it must be greater than or equal to the order limit.
+- The router discards non-executable venues, then ranks feasible venues by price closeness to the limit plus available depth.
+- With the current fixture quotes:
+  - `make route-order` routes `buy_yes` on `prop-001` to `Polymarket`
+  - `make route-order SIDE=sell_yes LIMIT=0.55` routes `sell_yes` on `prop-001` to `Kalshi`
 
 ## Evaluation set labels
 The fixture artifacts include labels for:
