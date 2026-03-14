@@ -43,6 +43,12 @@ To run verification from the CLI:
 make verify
 ```
 
+To inspect routeable proposition clusters before routing a specific CLI order:
+
+```bash
+make list-clusters ROUTEABLE_ONLY=1
+```
+
 Optional live ingest check:
 
 ```bash
@@ -52,7 +58,7 @@ make live-inspect LIVE_LIMIT=1
 To route a specific hypothetical order against the fixture state:
 
 ```bash
-make route-order
+make route-order CLUSTER=prop-001
 ```
 
 ## Main Architectural Decisions

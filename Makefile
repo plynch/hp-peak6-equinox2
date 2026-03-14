@@ -1,19 +1,21 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help dev verify test fixture-demo live-inspect route-order clean
+.PHONY: help dev verify test fixture-demo list-clusters live-inspect route-order clean
 
-CLUSTER ?= prop-001
+CLUSTER ?=
 SIDE ?= buy_yes
 LIMIT ?= 0.60
 SIZE ?= 1000
 LIVE_LIMIT ?= 1
+ROUTEABLE_ONLY ?= 0
 
 help:
 	@echo "Available targets:"
 	@echo "  make dev                              # start local web UI at http://127.0.0.1:8080"
 	@echo "  make verify                           # run tests and fixture demo"
-	@echo "  make route-order                      # route default buy_yes order for prop-001"
-	@echo "  make route-order SIDE=sell_yes LIMIT=0.55"
+	@echo "  make list-clusters ROUTEABLE_ONLY=1   # inspect current routeable proposition clusters"
+	@echo "  make route-order CLUSTER=prop-001"
+	@echo "  make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.55"
 	@echo "  make live-inspect LIVE_LIMIT=1        # optional public API ingestion check"
 	@echo "  make clean"
 
@@ -28,10 +30,14 @@ test:
 fixture-demo:
 	go run ./cmd/equinox fixture-demo
 
+list-clusters:
+	go run ./cmd/equinox list-clusters $(if $(filter 1,$(ROUTEABLE_ONLY)),--routeable-only,)
+
 live-inspect:
 	go run ./cmd/equinox live-inspect --limit $(LIVE_LIMIT)
 
 route-order:
+	@test -n "$(CLUSTER)" || (echo "CLUSTER is required. Run 'make list-clusters ROUTEABLE_ONLY=1' first."; exit 1)
 	go run ./cmd/equinox route-order --cluster $(CLUSTER) --side $(SIDE) --limit $(LIMIT) --size $(SIZE)
 
 clean:

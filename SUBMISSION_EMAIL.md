@@ -20,6 +20,7 @@ Suggested commands:
 ```bash
 make dev
 make verify
+make list-clusters ROUTEABLE_ONLY=1
 make live-inspect LIVE_LIMIT=1
 ```
 

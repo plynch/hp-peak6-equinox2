@@ -40,6 +40,26 @@
     "quote_fresh_at": "2026-03-14T00:00:00Z"
   },
   {
+    "event_id": "pm-soc-1",
+    "event_title": "Liverpool vs Arsenal next week",
+    "event_family": "soccer_big_five",
+    "market_id": "PM-SOC-LIV-ARS-BTTS",
+    "question": "Will both teams score in Liverpool vs Arsenal?",
+    "category": "sports",
+    "market_type": "binary",
+    "outcomes": ["Yes", "No"],
+    "rules_primary_source": "official league result",
+    "rules_text": "Resolves Yes if Liverpool and Arsenal each score at least one goal in 90-minute regulation.",
+    "end_date_iso": "2026-03-22T16:30:00Z",
+    "quote_yes_bid": 0.50,
+    "quote_yes_ask": 0.52,
+    "quote_no_bid": 0.47,
+    "quote_no_ask": 0.50,
+    "depth_notional": 9500,
+    "quote_observed": true,
+    "quote_fresh_at": "2026-03-14T00:00:00Z"
+  },
+  {
     "event_id": "pm-soc-2",
     "event_title": "Barcelona vs Real Madrid next week",
     "event_family": "soccer_big_five",

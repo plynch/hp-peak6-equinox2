@@ -208,12 +208,13 @@
           <div class="operator-list">
             <div><span class="pill">make dev</span> starts this local UI at <span class="mono">http://127.0.0.1:8080</span>.</div>
             <div><span class="pill">make verify</span> runs tests plus the fixture CLI flow.</div>
-            <div><span class="pill">make route-order</span> is the CLI version of the order simulator.</div>
+            <div><span class="pill">make list-clusters ROUTEABLE_ONLY=1</span> shows the currently routeable proposition clusters in the CLI.</div>
+            <div><span class="pill">make route-order CLUSTER=prop-001</span> is the CLI version of the order simulator.</div>
             <div><span class="pill">make live-inspect LIVE_LIMIT=1</span> checks current public API ingest viability.</div>
           </div>
           <p style="margin-top: 0.9rem;">
-            Current fixture-backed routeable cluster:
-            <span class="mono">{{.Snapshot.Evaluation.strong_route_safe_proposition_cluster}}</span>
+            Current fixture-backed routeable clusters:
+            <span class="mono">{{.RouteableCount}}</span>
           </p>
           <p style="margin-top: 0.65rem;">
             Artifact bundle:

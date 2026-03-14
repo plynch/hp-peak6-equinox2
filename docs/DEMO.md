@@ -20,31 +20,40 @@ If you want a quick list of supported commands first:
 make
 ```
 
-## 2) Use the web UI first
+## 2) Inspect routeable clusters from the CLI
+```bash
+make list-clusters ROUTEABLE_ONLY=1
+```
+
+This is the explicit selection step before routing a CLI order.
+
+## 3) Use the web UI first
 - Review the routeable cluster card.
 - Use the order simulator form with the default values.
 - Confirm that the default `buy_yes` order routes to `Polymarket`.
-- Change to `sell_yes` with limit `0.55` and confirm it routes to `Kalshi`.
+- Change to `sell_yes` with limit `0.55` on the Fed cluster and confirm it routes to `Kalshi`.
+- Switch to the Liverpool-Arsenal both-teams-to-score cluster and confirm that a `buy_yes` order at `0.53` routes to `Polymarket`.
 
-## 3) Run checks from the CLI
+## 4) Run checks from the CLI
 ```bash
 make verify
 ```
 
 `make verify` runs tests plus the fixture CLI path.
 
-## 4) Route a specific hypothetical order from the CLI
+## 5) Route specific hypothetical orders from the CLI
 ```bash
-make route-order
+make route-order CLUSTER=prop-001
 ```
 
 You can also try:
 
 ```bash
 make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.55 SIZE=1000
+make route-order CLUSTER=prop-004 SIDE=buy_yes LIMIT=0.53 SIZE=1000
 ```
 
-## 5) Inspect artifact
+## 6) Inspect artifact
 ```bash
 LATEST=$(ls -1 artifacts | tail -n 1)
 cat artifacts/$LATEST/bundle.json
@@ -57,12 +66,14 @@ While presenting, call out:
 - Proposition clusters show explicit classifications and refusal reasons.
 - `evaluation_labels.clear_non_match_case` points to an `explicit_non_match` assessment (paired cross-venue rejection), not just a single-member cluster fallback.
 - `route-order` only works for proposition clusters marked `routeable`.
-- In the current fixture corpus, `prop-001` is the routeable proposition cluster.
+- In the current fixture corpus, there are currently two routeable proposition clusters:
+  - `prop-001` for the Fed hike proposition
+  - `prop-004` for the Liverpool-Arsenal both-teams-to-score proposition
 - The router currently supports hypothetical `buy_yes` and `sell_yes` orders only.
 - `buy_yes` uses `yes_ask <= limit`; `sell_yes` uses `yes_bid >= limit`.
-- With current fixture quotes, the default `make route-order` call routes to `Polymarket`, while `SIDE=sell_yes LIMIT=0.55` routes to `Kalshi`.
+- With current fixture quotes, `prop-001 buy_yes` routes to `Polymarket`, `prop-001 sell_yes LIMIT=0.55` routes to `Kalshi`, and `prop-004 buy_yes LIMIT=0.53` routes to `Polymarket`.
 
-## 6) Optional live inspect
+## 7) Optional live inspect
 ```bash
 make live-inspect LIVE_LIMIT=3
 ```

@@ -58,12 +58,14 @@ Outputs:
   - Runs `go test ./...` plus the deterministic fixture CLI flow.
 - `make`
   - Prints the supported demo and operator targets.
+- `make list-clusters ROUTEABLE_ONLY=1`
+  - Lists the currently routeable proposition clusters so you can choose an explicit target for routing.
 - `go run ./cmd/equinox fixture-demo`
   - Deterministic CLI artifact/materialization path.
-- `make route-order`
-  - Routes the default hypothetical `buy_yes` order against the default fixture cluster `prop-001`.
-- `make route-order SIDE=sell_yes LIMIT=0.55`
-  - Routes a `sell_yes` order against the same fixture cluster.
+- `make route-order CLUSTER=prop-001`
+  - Routes a `buy_yes` hypothetical order against the Fed proposition cluster.
+- `make route-order CLUSTER=prop-004 SIDE=sell_yes LIMIT=0.50`
+  - Routes a `sell_yes` hypothetical order against the Liverpool-Arsenal both-teams-to-score proposition cluster.
 - `make live-inspect LIVE_LIMIT=3`
   - Optional public API check for current ingestion viability.
 
@@ -75,8 +77,9 @@ Outputs:
   - side
   - limit probability
   - size notional
-- In the current fixture corpus, the routeable cluster is:
+- In the current fixture corpus, the routeable clusters are:
   - `prop-001`: `fed hike rate march 2026 meeting`
+  - `prop-004`: `both team score in liverpool vs arsenal`
 - The router refuses:
   - unsupported clusters
   - ambiguous clusters
@@ -87,13 +90,15 @@ Outputs:
 - `make dev` loads fixture state, normalizes venue records, builds event clusters, then proposition clusters, writes the local artifact and SQLite state, and starts the web UI.
 - The web UI uses that same fixture snapshot to show routeable clusters, default routing outcomes, and a browser-based order simulator.
 - `make verify` exercises the CLI path without needing the browser.
+- `make list-clusters ROUTEABLE_ONLY=1` is the CLI discovery step before routing a specific order.
 - `make route-order ...` reloads that same fixture state and looks up the requested proposition cluster.
 - For `buy_yes`, the executable price is `yes_ask`, and it must be less than or equal to the order limit.
 - For `sell_yes`, the executable price is `yes_bid`, and it must be greater than or equal to the order limit.
 - The router discards non-executable venues, then ranks feasible venues by price closeness to the limit plus available depth.
 - With the current fixture quotes:
-  - `make route-order` routes `buy_yes` on `prop-001` to `Polymarket`
-  - `make route-order SIDE=sell_yes LIMIT=0.55` routes `sell_yes` on `prop-001` to `Kalshi`
+  - `make route-order CLUSTER=prop-001` routes `buy_yes` on the Fed cluster to `Polymarket`
+  - `make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.55` routes `sell_yes` on the Fed cluster to `Kalshi`
+  - `make route-order CLUSTER=prop-004 SIDE=buy_yes LIMIT=0.53` routes `buy_yes` on the Liverpool-Arsenal BTTS cluster to `Polymarket`
 
 ## Evaluation set labels
 The fixture artifacts include labels for:

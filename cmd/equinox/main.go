@@ -19,7 +19,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: equinox <serve|fixture-demo|route-order|live-inspect>")
+		fmt.Println("usage: equinox <serve|fixture-demo|list-clusters|route-order|live-inspect>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -29,6 +29,10 @@ func main() {
 		}
 	case "fixture-demo":
 		if err := runFixtureDemo(); err != nil {
+			panic(err)
+		}
+	case "list-clusters":
+		if err := runListClusters(); err != nil {
 			panic(err)
 		}
 	case "route-order":
@@ -99,7 +103,7 @@ func runRouteOrder() error {
 	_ = fs.Parse(os.Args[2:])
 
 	if *clusterID == "" {
-		return fmt.Errorf("missing required --cluster flag")
+		return fmt.Errorf("missing required --cluster flag; run `make list-clusters ROUTEABLE_ONLY=1` first")
 	}
 
 	snapshot, err := demo.LoadFixtureSnapshot()
@@ -119,6 +123,44 @@ func runRouteOrder() error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
+}
+
+func runListClusters() error {
+	fs := flag.NewFlagSet("list-clusters", flag.ExitOnError)
+	routeableOnly := fs.Bool("routeable-only", false, "show only routeable proposition clusters")
+	_ = fs.Parse(os.Args[2:])
+
+	snapshot, err := demo.LoadFixtureSnapshot()
+	if err != nil {
+		return err
+	}
+
+	eventTitles := map[string]string{}
+	for _, event := range snapshot.Events {
+		eventTitles[event.ClusterID] = event.Title
+	}
+
+	fmt.Println("proposition clusters:")
+	for _, prop := range snapshot.Props {
+		if *routeableOnly && prop.Routeability != model.Routeable {
+			continue
+		}
+		fmt.Printf("- %s | event=%s (%s) | routeability=%s | proposition=%s | venues=%s\n",
+			prop.ClusterID,
+			prop.EventClusterID,
+			eventTitles[prop.EventClusterID],
+			prop.Routeability,
+			prop.Proposition,
+			joinVenues(prop.MarketInstances),
+		)
+		if len(prop.RefusalReasons) > 0 {
+			fmt.Printf("  refusal_reasons=%s\n", strings.Join(prop.RefusalReasons, "; "))
+		}
+		if len(prop.AmbiguityNotes) > 0 {
+			fmt.Printf("  ambiguity_notes=%s\n", strings.Join(prop.AmbiguityNotes, "; "))
+		}
+	}
+	return nil
 }
 
 func runLiveInspect() error {
@@ -150,11 +192,15 @@ func printFixtureSummary(props []model.PropositionCluster, decisions []model.Rou
 	}
 
 	fmt.Println("\nexample route-order usage:")
+	fmt.Println("  make list-clusters ROUTEABLE_ONLY=1")
 	for _, p := range props {
 		if p.Routeability == model.Routeable {
-			fmt.Printf("  make route-order CLUSTER=%s SIDE=buy_yes LIMIT=0.60 SIZE=1000\n", p.ClusterID)
-			fmt.Printf("  make route-order CLUSTER=%s SIDE=sell_yes LIMIT=0.55 SIZE=1000\n", p.ClusterID)
-			break
+			if buyLimit, ok := bestBuyLimit(p); ok {
+				fmt.Printf("  make route-order CLUSTER=%s SIDE=buy_yes LIMIT=%.2f SIZE=1000\n", p.ClusterID, buyLimit)
+			}
+			if sellLimit, ok := bestSellLimit(p); ok {
+				fmt.Printf("  make route-order CLUSTER=%s SIDE=sell_yes LIMIT=%.2f SIZE=1000\n", p.ClusterID, sellLimit)
+			}
 		}
 	}
 
@@ -174,6 +220,36 @@ func joinVenues(instances []model.VenueMarketInstance) string {
 		}
 	}
 	return strings.Join(out, ",")
+}
+
+func bestBuyLimit(prop model.PropositionCluster) (float64, bool) {
+	best := 0.0
+	found := false
+	for _, instance := range prop.MarketInstances {
+		if instance.Quote.YesAsk <= 0 {
+			continue
+		}
+		if !found || instance.Quote.YesAsk < best {
+			best = instance.Quote.YesAsk
+			found = true
+		}
+	}
+	return best, found
+}
+
+func bestSellLimit(prop model.PropositionCluster) (float64, bool) {
+	best := 0.0
+	found := false
+	for _, instance := range prop.MarketInstances {
+		if instance.Quote.YesBid <= 0 {
+			continue
+		}
+		if !found || instance.Quote.YesBid > best {
+			best = instance.Quote.YesBid
+			found = true
+		}
+	}
+	return best, found
 }
 
 func errText(err error) string {
