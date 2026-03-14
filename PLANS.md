@@ -335,3 +335,9 @@ The task is done when the repository contains a coherent, PR-ready MVP with:
 - reviewer-facing setup instructions
 - reviewer-facing demo instructions
 - implementation artifacts that make the clustering-first architecture easy to inspect
+
+## Implementation Notes (Current)
+
+- Implemented with Go 1.22 CLI-first structure.
+- Implemented relational persistence boundary with SQLite fallback (`internal/store`) to keep deterministic local execution in this environment while preserving clean store abstraction.
+- Fixture-first demo is primary (`fixture-demo`), optional live inspect command included.
