@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"equinox/internal/demo"
 	"equinox/internal/model"
@@ -68,14 +69,15 @@ func (a *App) Handler() http.Handler {
 }
 
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
+	defaultCluster, defaultLimit := defaultRoute(a.snapshot.Props)
 	data := viewData{
 		Snapshot:          a.snapshot,
 		RouteableCount:    countRouteable(a.snapshot.Props),
 		RouteableClusters: sortedRouteableProps(a.snapshot.Props),
 		EvaluationRows:    sortedEvaluationRows(a.snapshot.Evaluation),
-		DefaultClusterID:  defaultClusterID(a.snapshot.Props),
+		DefaultClusterID:  defaultCluster,
 		DefaultSide:       "buy_yes",
-		DefaultLimit:      "0.60",
+		DefaultLimit:      fmt.Sprintf("%.2f", defaultLimit),
 		DefaultSize:       "1000",
 	}
 
@@ -136,16 +138,35 @@ func countRouteable(props []model.PropositionCluster) int {
 	return count
 }
 
-func defaultClusterID(props []model.PropositionCluster) string {
-	for _, p := range props {
-		if p.Routeability == model.Routeable {
-			return p.ClusterID
+func defaultRoute(props []model.PropositionCluster) (string, float64) {
+	routeable := sortedRouteableProps(props)
+	if len(routeable) == 0 {
+		if len(props) == 0 {
+			return "", 0.60
 		}
+		return props[0].ClusterID, 0.60
 	}
-	if len(props) == 0 {
-		return ""
+	sort.Slice(routeable, func(i, j int) bool {
+		di, okI := earliestDeadline(routeable[i])
+		dj, okJ := earliestDeadline(routeable[j])
+		if okI != okJ {
+			return okI
+		}
+		if okI && !di.Equal(dj) {
+			return di.Before(dj)
+		}
+		winI := strings.Contains(routeable[i].Proposition, "win")
+		winJ := strings.Contains(routeable[j].Proposition, "win")
+		if winI != winJ {
+			return winI
+		}
+		return routeable[i].Proposition < routeable[j].Proposition
+	})
+	limit, ok := bestBuyLimit(routeable[0])
+	if !ok {
+		limit = 0.60
 	}
-	return props[0].ClusterID
+	return routeable[0].ClusterID, limit
 }
 
 func joinVenues(instances []model.VenueMarketInstance) string {
@@ -185,4 +206,34 @@ func sortedEvaluationRows(labels map[string]string) []evaluationRow {
 		return rows[i].Label < rows[j].Label
 	})
 	return rows
+}
+
+func earliestDeadline(prop model.PropositionCluster) (time.Time, bool) {
+	var best time.Time
+	found := false
+	for _, instance := range prop.MarketInstances {
+		if instance.DeadlineUTC == nil {
+			continue
+		}
+		if !found || instance.DeadlineUTC.Before(best) {
+			best = *instance.DeadlineUTC
+			found = true
+		}
+	}
+	return best, found
+}
+
+func bestBuyLimit(prop model.PropositionCluster) (float64, bool) {
+	best := 0.0
+	found := false
+	for _, instance := range prop.MarketInstances {
+		if instance.Quote.YesAsk <= 0 {
+			continue
+		}
+		if !found || instance.Quote.YesAsk < best {
+			best = instance.Quote.YesAsk
+			found = true
+		}
+	}
+	return best, found
 }

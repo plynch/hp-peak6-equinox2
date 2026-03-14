@@ -15,6 +15,7 @@ type RawMarket struct {
 	EventFamily     string   `json:"event_family"`
 	MarketTicker    string   `json:"market_ticker"`
 	Title           string   `json:"title"`
+	YesSubTitle     string   `json:"yes_sub_title"`
 	Category        string   `json:"category"`
 	MarketType      string   `json:"market_type"`
 	Outcomes        []string `json:"outcomes"`

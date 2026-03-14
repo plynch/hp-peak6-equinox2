@@ -3,6 +3,7 @@ package normalize
 import (
 	"testing"
 
+	"equinox/internal/adapters/kalshi"
 	"equinox/internal/adapters/polymarket"
 )
 
@@ -40,5 +41,50 @@ func TestDerivesNormalizationSignalsFromVenueStyleFields(t *testing.T) {
 	}
 	if in.DeadlineProvenance != "rules_text_only" {
 		t.Fatalf("expected rules_text_only provenance, got %s", in.DeadlineProvenance)
+	}
+}
+
+func TestDerivesComparableSportsWinnerTargetsAcrossVenues(t *testing.T) {
+	pmRows := []polymarket.RawMarket{
+		{
+			EventID:      "pm-epl-1",
+			EventTitle:   "Liverpool FC vs. Tottenham Hotspur FC",
+			EventFamily:  "soccer_big_five",
+			MarketID:     "pm-liv",
+			Question:     "Will Liverpool FC win on 2026-03-15?",
+			Category:     "sports",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "90 minutes plus stoppage time only.",
+			EndDateISO:   "2026-03-15T16:30:00Z",
+			QuoteYesAsk:  0.76,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+	}
+	kalshiRows := []kalshi.RawMarket{
+		{
+			EventID:      "k-epl-1",
+			EventTitle:   "Liverpool vs Tottenham",
+			EventFamily:  "soccer_big_five",
+			MarketTicker: "KXEPLGAME-26MAR15LFCTOT-LFC",
+			Title:        "Liverpool vs Tottenham Winner?",
+			YesSubTitle:  "Liverpool",
+			Category:     "sports",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "90 minutes plus stoppage time only.",
+			CloseTimeISO: "2026-03-15T16:30:00Z",
+			YesAskCents:  76,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+	}
+
+	pm := FromPolymarket(pmRows)
+	ka := FromKalshi(kalshiRows)
+	if pm[0].NormalizedYesTarget != "liverpool win" {
+		t.Fatalf("expected polymarket normalized target to be liverpool win, got %q", pm[0].NormalizedYesTarget)
+	}
+	if ka[0].NormalizedYesTarget != "liverpool win" {
+		t.Fatalf("expected kalshi normalized target to be liverpool win, got %q", ka[0].NormalizedYesTarget)
 	}
 }

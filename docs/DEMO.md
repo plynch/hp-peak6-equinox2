@@ -31,8 +31,11 @@ This is the explicit selection step before routing a CLI order.
 - Review the routeable cluster card.
 - Use the order simulator form with the default values.
 - Confirm that the default `buy_yes` order routes to `Polymarket`.
-- Change to `sell_yes` with limit `0.55` on the Fed cluster and confirm it routes to `Kalshi`.
-- Switch to the Liverpool-Arsenal both-teams-to-score cluster and confirm that a `buy_yes` order at `0.53` routes to `Polymarket`.
+- Change to `sell_yes` with limit `0.58` on the Fed cluster and confirm it routes to `Kalshi`.
+- Switch to the Liverpool vs Tottenham event, scheduled for Sunday, March 15, 2026 at 11:30 AM Central.
+- Confirm that the `draw` proposition at limit `0.15` routes to `Kalshi`.
+- Confirm that the `liverpool win` proposition at limit `0.76` routes to `Polymarket`.
+- Confirm that the `tottenham win` proposition at limit `0.10` routes to `Polymarket`.
 
 ## 4) Run checks from the CLI
 ```bash
@@ -49,8 +52,10 @@ make route-order CLUSTER=prop-001
 You can also try:
 
 ```bash
-make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.55 SIZE=1000
-make route-order CLUSTER=prop-004 SIDE=buy_yes LIMIT=0.53 SIZE=1000
+make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.58 SIZE=1000
+make route-order CLUSTER=prop-007 SIDE=buy_yes LIMIT=0.15 SIZE=1000
+make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76 SIZE=1000
+make route-order CLUSTER=prop-009 SIDE=buy_yes LIMIT=0.10 SIZE=1000
 ```
 
 ## 6) Inspect artifact
@@ -66,12 +71,13 @@ While presenting, call out:
 - Proposition clusters show explicit classifications and refusal reasons.
 - `evaluation_labels.clear_non_match_case` points to an `explicit_non_match` assessment (paired cross-venue rejection), not just a single-member cluster fallback.
 - `route-order` only works for proposition clusters marked `routeable`.
-- In the current fixture corpus, there are currently two routeable proposition clusters:
+- In the current fixture corpus, there are currently five routeable proposition clusters:
   - `prop-001` for the Fed hike proposition
   - `prop-004` for the Liverpool-Arsenal both-teams-to-score proposition
+  - `prop-007`, `prop-008`, and `prop-009` for the Liverpool vs Tottenham match outcome propositions (`draw`, `liverpool win`, `tottenham win`)
 - The router currently supports hypothetical `buy_yes` and `sell_yes` orders only.
 - `buy_yes` uses `yes_ask <= limit`; `sell_yes` uses `yes_bid >= limit`.
-- With current fixture quotes, `prop-001 buy_yes` routes to `Polymarket`, `prop-001 sell_yes LIMIT=0.55` routes to `Kalshi`, and `prop-004 buy_yes LIMIT=0.53` routes to `Polymarket`.
+- With current fixture quotes, `prop-001 buy_yes` routes to `Polymarket`, `prop-001 sell_yes LIMIT=0.58` routes to `Kalshi`, `prop-007 buy_yes LIMIT=0.15` routes to `Kalshi`, and `prop-008` / `prop-009 buy_yes` route to `Polymarket`.
 
 ## 7) Optional live inspect
 ```bash

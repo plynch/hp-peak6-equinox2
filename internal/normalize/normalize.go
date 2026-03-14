@@ -40,11 +40,17 @@ func normalizePhrase(s string) string {
 	repl := strings.NewReplacer("?", "", ",", " ", ".", " ", ":", " ", "-", " ")
 	s = repl.Replace(s)
 	parts := strings.Fields(s)
-	stop := map[string]bool{"the": true, "will": true, "at": true, "a": true, "an": true, "if": true}
+	stop := map[string]bool{"the": true, "will": true, "at": true, "a": true, "an": true, "if": true, "on": true, "fc": true}
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		if stop[p] {
 			continue
+		}
+		if isNumericToken(p) {
+			continue
+		}
+		if p == "tie" {
+			p = "draw"
 		}
 		if strings.HasSuffix(p, "s") && len(p) > 4 {
 			p = strings.TrimSuffix(p, "s")
@@ -54,12 +60,67 @@ func normalizePhrase(s string) string {
 	return strings.Join(out, " ")
 }
 
-func inferNormalizedTarget(question string, outcomes []string) string {
+func inferNormalizedTarget(question string, outcomes []string, selection string) string {
+	if sportsTarget := inferSportsTarget(question, selection); sportsTarget != "" {
+		return sportsTarget
+	}
 	q := normalizePhrase(question)
 	if len(outcomes) > 2 {
 		q = q + " multi-outcome"
 	}
 	return strings.TrimSpace(q)
+}
+
+func inferSportsTarget(question string, selection string) string {
+	lower := strings.ToLower(strings.TrimSpace(question))
+
+	if strings.Contains(lower, "both teams score") {
+		return "both teams score"
+	}
+	if strings.Contains(lower, "end in a draw") {
+		return "draw"
+	}
+	if strings.Contains(lower, " winner") && strings.TrimSpace(selection) != "" {
+		canonical := canonicalSelection(selection)
+		if canonical == "draw" {
+			return "draw"
+		}
+		return canonical + " win"
+	}
+	if strings.HasPrefix(lower, "will ") && strings.Contains(lower, " win") {
+		subject := lower[len("will "):]
+		subject = strings.Split(subject, " win")[0]
+		canonical := canonicalSelection(subject)
+		if canonical != "" {
+			return canonical + " win"
+		}
+	}
+	return ""
+}
+
+func canonicalSelection(selection string) string {
+	s := normalizePhrase(selection)
+	switch s {
+	case "tie":
+		return "draw"
+	case "draw":
+		return "draw"
+	}
+	repl := strings.NewReplacer(
+		"tottenham hotspur", "tottenham",
+		"liverpool football club", "liverpool",
+	)
+	s = repl.Replace(s)
+	return strings.TrimSpace(s)
+}
+
+func isNumericToken(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
 }
 
 func inferUnsupported(binaryLike bool, hasOther bool, marketType string, outcomes []string, text string) bool {
@@ -94,7 +155,11 @@ func inferBinaryLike(outcomes []string, marketType string) (bool, bool) {
 func inferAmbiguity(marketTitle, rules string, deadline *time.Time) []string {
 	var notes []string
 	text := strings.ToLower(marketTitle + " " + rules)
-	if strings.Contains(text, "advance") || strings.Contains(text, "extra time") || strings.Contains(text, "penalties") {
+	excludesExtraTime := strings.Contains(text, "does not include extra time") ||
+		strings.Contains(text, "does not include extra time or penalties") ||
+		strings.Contains(text, "no extra time or penalties")
+	if strings.Contains(text, "advance") ||
+		((strings.Contains(text, "extra time") || strings.Contains(text, "penalties")) && !excludesExtraTime) {
 		notes = append(notes, "qualification/extra-time semantics may diverge from regulation-only contracts")
 	}
 	if strings.Contains(text, "subject to") || strings.Contains(text, "discretion") {
@@ -131,7 +196,7 @@ func FromPolymarket(rows []polymarket.RawMarket) []model.VenueMarketInstance {
 	for _, r := range rows {
 		eventKey := fmt.Sprintf("%s:%s", slug(r.EventFamily), slug(r.EventTitle))
 		binaryLike, hasOther := inferBinaryLike(r.Outcomes, r.MarketType)
-		normTarget := inferNormalizedTarget(r.Question, r.Outcomes)
+		normTarget := inferNormalizedTarget(r.Question, r.Outcomes, "")
 		deadline := parseTime(r.EndDateISO)
 		unsupported := inferUnsupported(binaryLike, hasOther, r.MarketType, r.Outcomes, r.Question+" "+r.RulesText)
 		amb := inferAmbiguity(r.Question, r.RulesText, deadline)
@@ -167,7 +232,7 @@ func FromKalshi(rows []kalshi.RawMarket) []model.VenueMarketInstance {
 	for _, r := range rows {
 		eventKey := fmt.Sprintf("%s:%s", slug(r.EventFamily), slug(r.EventTitle))
 		binaryLike, hasOther := inferBinaryLike(r.Outcomes, r.MarketType)
-		normTarget := inferNormalizedTarget(r.Title, r.Outcomes)
+		normTarget := inferNormalizedTarget(r.Title, r.Outcomes, r.YesSubTitle)
 		deadline := parseTime(r.CloseTimeISO)
 		unsupported := inferUnsupported(binaryLike, hasOther, r.MarketType, r.Outcomes, r.Title+" "+r.RulesText)
 		amb := inferAmbiguity(r.Title, r.RulesText+" "+r.SettlementNotes, deadline)

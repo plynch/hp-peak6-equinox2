@@ -15,6 +15,7 @@ Additional docs:
 - Fixture-backed ingestion of metadata and quote/order-book-like fields.
 - Canonical event clusters from cross-venue heuristic similarity (event family, token overlap, category, deadline proximity).
 - Canonical proposition clusters inside each event from proposition-text similarity + deadline checks.
+- A live-style Premier League event cluster for Liverpool vs Tottenham on Sunday, March 15, 2026 at 11:30 AM Central, with three routeable cross-venue propositions (`liverpool win`, `draw`, `tottenham win`).
 - Explicit routeability classifications (routeable, event-only, unsupported, ambiguous).
 - Venue-agnostic routing simulation over normalized inputs with limit-price feasibility enforcement.
 - Inspectable artifacts and durable relational persistence (SQLite fallback relational store).
@@ -64,8 +65,10 @@ Outputs:
   - Deterministic CLI artifact/materialization path.
 - `make route-order CLUSTER=prop-001`
   - Routes a `buy_yes` hypothetical order against the Fed proposition cluster.
-- `make route-order CLUSTER=prop-004 SIDE=sell_yes LIMIT=0.50`
-  - Routes a `sell_yes` hypothetical order against the Liverpool-Arsenal both-teams-to-score proposition cluster.
+- `make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76`
+  - Routes a `buy_yes` hypothetical order against the Liverpool–Tottenham `liverpool win` proposition.
+- `make route-order CLUSTER=prop-007 SIDE=buy_yes LIMIT=0.15`
+  - Routes a `buy_yes` hypothetical order against the Liverpool–Tottenham `draw` proposition.
 - `make live-inspect LIVE_LIMIT=3`
   - Optional public API check for current ingestion viability.
 
@@ -78,8 +81,11 @@ Outputs:
   - limit probability
   - size notional
 - In the current fixture corpus, the routeable clusters are:
-  - `prop-001`: `fed hike rate march 2026 meeting`
-  - `prop-004`: `both team score in liverpool vs arsenal`
+  - `prop-001`: `fed hike rate march meeting`
+  - `prop-004`: `both teams score`
+  - `prop-007`: `draw` for `Liverpool vs Tottenham`
+  - `prop-008`: `liverpool win` for `Liverpool vs Tottenham`
+  - `prop-009`: `tottenham win` for `Liverpool vs Tottenham`
 - The router refuses:
   - unsupported clusters
   - ambiguous clusters
@@ -97,8 +103,10 @@ Outputs:
 - The router discards non-executable venues, then ranks feasible venues by price closeness to the limit plus available depth.
 - With the current fixture quotes:
   - `make route-order CLUSTER=prop-001` routes `buy_yes` on the Fed cluster to `Polymarket`
-  - `make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.55` routes `sell_yes` on the Fed cluster to `Kalshi`
-  - `make route-order CLUSTER=prop-004 SIDE=buy_yes LIMIT=0.53` routes `buy_yes` on the Liverpool-Arsenal BTTS cluster to `Polymarket`
+  - `make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.58` routes `sell_yes` on the Fed cluster to `Kalshi`
+  - `make route-order CLUSTER=prop-007 SIDE=buy_yes LIMIT=0.15` routes the Liverpool–Tottenham `draw` proposition to `Kalshi`
+  - `make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76` routes the Liverpool–Tottenham `liverpool win` proposition to `Polymarket`
+  - `make route-order CLUSTER=prop-009 SIDE=buy_yes LIMIT=0.10` routes the Liverpool–Tottenham `tottenham win` proposition to `Polymarket`
 
 ## Evaluation set labels
 The fixture artifacts include labels for:

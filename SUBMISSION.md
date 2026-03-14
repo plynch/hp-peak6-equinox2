@@ -13,6 +13,8 @@ This submission implements:
 - deterministic fixture-first demo support
 - durable local persistence through a relational store boundary
 
+The current fixture corpus includes a live-style Premier League event for Liverpool vs Tottenham on Sunday, March 15, 2026 at 11:30 AM Central, modeled with three routeable cross-venue match-outcome propositions.
+
 This is intentionally a prototype, not a trading product.
 
 ## What To Review First
@@ -58,7 +60,7 @@ make live-inspect LIVE_LIMIT=1
 To route a specific hypothetical order against the fixture state:
 
 ```bash
-make route-order CLUSTER=prop-001
+make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76
 ```
 
 ## Main Architectural Decisions

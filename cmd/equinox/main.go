@@ -90,7 +90,7 @@ func runFixtureDemo() error {
 		return err
 	}
 	fmt.Printf("fixture demo complete\nartifact: %s\n\n", snapshot.ArtifactPath)
-	printFixtureSummary(snapshot.Props, snapshot.Decisions)
+	printFixtureSummary(snapshot.Events, snapshot.Props, snapshot.Decisions)
 	return nil
 }
 
@@ -177,7 +177,12 @@ func runLiveInspect() error {
 	return enc.Encode(out)
 }
 
-func printFixtureSummary(props []model.PropositionCluster, decisions []model.RoutingDecision) {
+func printFixtureSummary(events []model.EventCluster, props []model.PropositionCluster, decisions []model.RoutingDecision) {
+	eventTitles := map[string]string{}
+	for _, event := range events {
+		eventTitles[event.ClusterID] = event.Title
+	}
+
 	fmt.Println("routeable proposition clusters:")
 	foundRouteable := false
 	for _, p := range props {
@@ -185,7 +190,7 @@ func printFixtureSummary(props []model.PropositionCluster, decisions []model.Rou
 			continue
 		}
 		foundRouteable = true
-		fmt.Printf("- %s | %s | venues=%s\n", p.ClusterID, p.Proposition, joinVenues(p.MarketInstances))
+		fmt.Printf("- %s | event=%s | proposition=%s | venues=%s\n", p.ClusterID, eventTitles[p.EventClusterID], p.Proposition, joinVenues(p.MarketInstances))
 	}
 	if !foundRouteable {
 		fmt.Println("- none")
