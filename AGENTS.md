@@ -14,6 +14,10 @@ Before proposing architecture, implementation, or review conclusions, read these
 2. `PROJECT_REQUIREMENTS_DOCUMENT.md`
 3. `PROJECT_PRESEARCH_DOCUMENT.md`
 
+If the task is a substantial implementation task, also read:
+
+4. `PLANS.md`
+
 If these documents conflict with older notes or deleted planning artifacts, trust the three files above.
 
 ## Current Planning Posture
@@ -29,8 +33,12 @@ Assume the following unless the task explicitly changes planning:
   - canonical event clusters
   - canonical proposition clusters
   - venue market instances attached beneath them
-- supported routeable markets:
+- supported routeable proposition family:
   - simple binary yes or no propositions only
+- event clustering posture:
+  - event clustering is central to the MVP
+  - event clusters may contain routeable, non-routeable, ambiguous, or unsupported market instances
+  - `binary-only` narrows what may be routed, not what may be clustered at the event level
 - demo posture:
   - fixture-first by default
   - live mode proves ingestion but may not prove live routeability every run
@@ -68,6 +76,14 @@ When asked to create or revise an implementation plan:
 - prefer a deterministic fixture-first reviewer path
 - state what is intentionally unsupported
 
+When asked to implement the MVP or run a long Codex task:
+
+- use `PLANS.md` as the execution plan
+- keep `PLANS.md` aligned with reality if material implementation decisions change
+- do not let Docker or PostgreSQL setup block the core prototype if the environment makes them unreliable
+- preserve a clean relational store boundary even if an embedded relational fallback is used for execution reliability
+- do not stop before running the relevant checks, preferably `go test ./...`, unless the repo state makes that impossible
+
 ## Review Guidelines
 
 - treat spec drift, hidden ambiguity, and venue-specific router logic as high-priority issues
@@ -79,3 +95,4 @@ When asked to create or revise an implementation plan:
 - Keep `PROJECT_REQUIREMENTS_DOCUMENT.md` synced to the newest active PRD version.
 - If creating a new PRD version, leave older versioned PRDs unchanged unless explicitly asked.
 - Keep repo instructions concise. If guidance grows large, move detail into the PRD or a task-specific doc instead of bloating `AGENTS.md`.
+- Keep long-running implementation detail in `PLANS.md`, not in `AGENTS.md`.
