@@ -1,6 +1,6 @@
 # Equinox MVP (Go 1.22+)
 
-Equinox is a CLI-first, local-first prototype for cross-venue prediction market clustering and routing simulation.
+Equinox is a local-first prototype for cross-venue prediction market clustering and routing simulation. The core engine is Go, and the primary demo surface is now a thin local web UI backed by the same fixture-first pipeline as the CLI.
 
 Implemented venues:
 - Polymarket
@@ -39,6 +39,8 @@ Still curated in fixtures:
 make dev
 ```
 
+Then open [http://127.0.0.1:8080](http://127.0.0.1:8080).
+
 To see the available operator commands:
 
 ```bash
@@ -51,11 +53,13 @@ Outputs:
 
 ## Commands
 - `make dev`
-  - One-command reviewer setup and demo path.
+  - Starts the local web UI demo on `http://127.0.0.1:8080`.
+- `make verify`
+  - Runs `go test ./...` plus the deterministic fixture CLI flow.
 - `make`
   - Prints the supported demo and operator targets.
 - `go run ./cmd/equinox fixture-demo`
-  - Deterministic, secret-free reviewer path.
+  - Deterministic CLI artifact/materialization path.
 - `make route-order`
   - Routes the default hypothetical `buy_yes` order against the default fixture cluster `prop-001`.
 - `make route-order SIDE=sell_yes LIMIT=0.55`
@@ -80,7 +84,9 @@ Outputs:
   - executable quotes that violate the order limit
 
 ## How Routing Works
-- `make dev` loads fixture state, normalizes venue records, builds event clusters, then proposition clusters.
+- `make dev` loads fixture state, normalizes venue records, builds event clusters, then proposition clusters, writes the local artifact and SQLite state, and starts the web UI.
+- The web UI uses that same fixture snapshot to show routeable clusters, default routing outcomes, and a browser-based order simulator.
+- `make verify` exercises the CLI path without needing the browser.
 - `make route-order ...` reloads that same fixture state and looks up the requested proposition cluster.
 - For `buy_yes`, the executable price is `yes_ask`, and it must be less than or equal to the order limit.
 - For `sell_yes`, the executable price is `yes_bid`, and it must be greater than or equal to the order limit.
@@ -100,6 +106,6 @@ The fixture artifacts include labels for:
 ## Scope boundaries
 - No third venue.
 - No real-money execution.
-- No production UI.
+- No production-grade UI.
 - Routeable family restricted to simple binary yes/no only.
 - Unsupported/ambiguous markets are surfaced, not forced into routeable clusters.

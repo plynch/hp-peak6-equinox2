@@ -2,7 +2,7 @@
 
 ## Overview
 
-Equinox is a CLI-first, local-first infrastructure prototype for cross-venue prediction market normalization, clustering, and routing simulation.
+Equinox is a local-first infrastructure prototype for cross-venue prediction market normalization, clustering, and routing simulation. The implementation remains Go-first and scriptable from the CLI, but the primary demo surface is now a thin local web UI backed by the same engine.
 
 This submission implements:
 
@@ -29,10 +29,18 @@ Then run:
 make dev
 ```
 
+Then open [http://127.0.0.1:8080](http://127.0.0.1:8080).
+
 To see the supported operator commands:
 
 ```bash
 make
+```
+
+To run verification from the CLI:
+
+```bash
+make verify
 ```
 
 Optional live ingest check:
@@ -61,6 +69,10 @@ make route-order
 ### Local-first deployment
 
 Local deployment was chosen deliberately because the project specification explicitly allows it. This keeps the prototype focused on canonical identity, ambiguity handling, and routing structure rather than deployment overhead.
+
+### Thin demo UI
+
+The local web UI is intentionally thin. It is a presentation layer over the same fixture-backed Go pipeline already exercised by the CLI. This makes the demo easier to operate without introducing a second application architecture.
 
 ### SQLite fallback
 

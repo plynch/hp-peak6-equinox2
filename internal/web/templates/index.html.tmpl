@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Equinox Demo</title>
+    <style>
+      :root {
+        --ink: #18212b;
+        --muted: #5d6b7b;
+        --line: #d7dde4;
+        --paper: #fbfbf8;
+        --panel: rgba(255, 255, 255, 0.9);
+        --accent: #0c6d62;
+        --accent-soft: #d9efe9;
+        --warn: #8f3f2c;
+        --warn-soft: #fae5df;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(12, 109, 98, 0.14), transparent 30rem),
+          linear-gradient(180deg, #f4f7f6 0%, #eceae2 100%);
+      }
+      a { color: var(--accent); }
+      .page {
+        width: min(1180px, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 2rem 0 3rem;
+      }
+      .hero {
+        display: grid;
+        gap: 1.25rem;
+        padding: 1.75rem;
+        background: linear-gradient(135deg, rgba(255,255,255,0.94), rgba(244,247,246,0.84));
+        border: 1px solid rgba(255,255,255,0.7);
+        border-radius: 24px;
+        box-shadow: 0 24px 60px rgba(24, 33, 43, 0.08);
+      }
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      h1, h2, h3 { margin: 0; }
+      h1 { font-size: clamp(2rem, 5vw, 3.4rem); line-height: 0.95; }
+      p { margin: 0; line-height: 1.55; }
+      .grid {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid rgba(255,255,255,0.7);
+        border-radius: 20px;
+        padding: 1.25rem;
+        box-shadow: 0 18px 36px rgba(24, 33, 43, 0.06);
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.85rem;
+      }
+      .stat {
+        padding: 1rem;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid var(--line);
+      }
+      .stat strong {
+        display: block;
+        font-size: 1.7rem;
+        margin-bottom: 0.25rem;
+      }
+      .pill {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .pill.warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+      .operator-list {
+        display: grid;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+      code, pre, select, input, button {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      form {
+        display: grid;
+        gap: 0.8rem;
+      }
+      label {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.95rem;
+      }
+      input, select, button {
+        width: 100%;
+        padding: 0.75rem 0.85rem;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: rgba(255,255,255,0.95);
+        color: var(--ink);
+        font-size: 0.95rem;
+      }
+      button {
+        cursor: pointer;
+        background: var(--ink);
+        color: white;
+        border-color: var(--ink);
+      }
+      .route-result {
+        display: grid;
+        gap: 0.85rem;
+      }
+      .route-error {
+        padding: 0.9rem 1rem;
+        border-radius: 14px;
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+      }
+      th, td {
+        padding: 0.8rem 0.4rem;
+        border-bottom: 1px solid rgba(93, 107, 123, 0.18);
+        vertical-align: top;
+        text-align: left;
+      }
+      th {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      ul {
+        margin: 0.4rem 0 0;
+        padding-left: 1.2rem;
+      }
+      @media (max-width: 720px) {
+        .page { width: min(100% - 1rem, 100%); padding-top: 1rem; }
+        .hero, .card { border-radius: 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="eyebrow">Equinox MVP Demo</div>
+        <h1>Cross-venue event clustering with route-safe proposition routing.</h1>
+        <p>
+          This local UI is fixture-backed and built on the same Go engine as the CLI. It shows what the prototype currently knows how to cluster,
+          which proposition clusters are routeable, and how a hypothetical order is routed without venue-specific logic in the router.
+        </p>
+        <div class="stats">
+          <div class="stat">
+            <strong>{{len .Snapshot.Events}}</strong>
+            Event clusters
+          </div>
+          <div class="stat">
+            <strong>{{len .Snapshot.Props}}</strong>
+            Proposition clusters
+          </div>
+          <div class="stat">
+            <strong>{{.RouteableCount}}</strong>
+            Routeable now
+          </div>
+          <div class="stat">
+            <strong>{{len .Snapshot.Assessments}}</strong>
+            Equivalence assessments
+          </div>
+        </div>
+      </section>
+
+      <section class="grid two">
+        <article class="card">
+          <div class="eyebrow">Runbook</div>
+          <h2>How to operate this demo</h2>
+          <div class="operator-list">
+            <div><span class="pill">make dev</span> starts this local UI at <span class="mono">http://127.0.0.1:8080</span>.</div>
+            <div><span class="pill">make verify</span> runs tests plus the fixture CLI flow.</div>
+            <div><span class="pill">make route-order</span> is the CLI version of the order simulator.</div>
+            <div><span class="pill">make live-inspect LIVE_LIMIT=1</span> checks current public API ingest viability.</div>
+          </div>
+          <p style="margin-top: 0.9rem;">
+            Current fixture-backed routeable cluster:
+            <span class="mono">{{.Snapshot.Evaluation.strong_route_safe_proposition_cluster}}</span>
+          </p>
+          <p style="margin-top: 0.65rem;">
+            Artifact bundle:
+            <span class="mono">{{.Snapshot.ArtifactPath}}</span>
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="eyebrow">Routing model</div>
+          <h2>What orders can route?</h2>
+          <ul>
+            <li>Only proposition clusters marked <span class="mono">routeable</span>.</li>
+            <li>Supported sides are <span class="mono">buy_yes</span> and <span class="mono">sell_yes</span>.</li>
+            <li><span class="mono">buy_yes</span> executes on <span class="mono">yes_ask</span> and requires <span class="mono">yes_ask &lt;= limit</span>.</li>
+            <li><span class="mono">sell_yes</span> executes on <span class="mono">yes_bid</span> and requires <span class="mono">yes_bid &gt;= limit</span>.</li>
+            <li>Feasible venues are ranked by price closeness to the limit plus available depth.</li>
+            <li>Unsupported, ambiguous, and event-only clusters are refused rather than coerced.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="grid two">
+        <article class="card">
+          <div class="eyebrow">Simulator</div>
+          <h2>Route a hypothetical order</h2>
+          <form method="post" action="/">
+            <label>
+              Proposition cluster
+              <select name="cluster">
+                {{range .RouteableClusters}}
+                <option value="{{.ClusterID}}" {{if eq $.DefaultClusterID .ClusterID}}selected{{end}}>
+                  {{.ClusterID}} | {{.Proposition}} | {{.Routeability}}
+                </option>
+                {{end}}
+              </select>
+            </label>
+            <label>
+              Side
+              <select name="side">
+                <option value="buy_yes" {{if eq .DefaultSide "buy_yes"}}selected{{end}}>buy_yes</option>
+                <option value="sell_yes" {{if eq .DefaultSide "sell_yes"}}selected{{end}}>sell_yes</option>
+              </select>
+            </label>
+            <label>
+              Limit probability
+              <input type="text" name="limit" value="{{.DefaultLimit}}">
+            </label>
+            <label>
+              Size notional
+              <input type="text" name="size" value="{{.DefaultSize}}">
+            </label>
+            <button type="submit">Simulate route</button>
+          </form>
+          {{if .RouteError}}
+          <div class="route-error" style="margin-top: 0.9rem;">{{.RouteError}}</div>
+          {{end}}
+        </article>
+
+        <article class="card">
+          <div class="eyebrow">Result</div>
+          <h2>Current routing result</h2>
+          {{if .RouteResult}}
+          <div class="route-result">
+            <div>
+              <span class="pill">{{.RouteResult.Decision.Action}}</span>
+              {{if .RouteResult.Decision.SelectedVenue}}
+              <span class="pill">{{.RouteResult.Decision.SelectedVenue}}</span>
+              {{else}}
+              <span class="pill warn">no venue selected</span>
+              {{end}}
+            </div>
+            <div>
+              <strong>{{.RouteResult.Cluster.ClusterID}}</strong><br>
+              {{.RouteResult.Cluster.Proposition}}
+            </div>
+            <div>
+              Reasons:
+              <ul>
+                {{range .RouteResult.Decision.Reasons}}
+                <li>{{.}}</li>
+                {{end}}
+              </ul>
+            </div>
+            <div>
+              Ranked candidates:
+              <ul>
+                {{range .RouteResult.Decision.RankedCandidates}}
+                <li class="mono">{{.}}</li>
+                {{end}}
+              </ul>
+            </div>
+          </div>
+          {{else}}
+          <p>Submit the form to simulate a route decision on the current fixture state.</p>
+          <p style="margin-top: 0.8rem;">Recommended first click: keep the defaults. That reproduces the current <span class="mono">buy_yes</span> route for the Fed proposition cluster.</p>
+          {{end}}
+        </article>
+      </section>
+
+      <section class="grid two">
+        <article class="card">
+          <div class="eyebrow">Routeable clusters</div>
+          <h2>What is routeable right now?</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Proposition</th>
+                <th>Routeability</th>
+                <th>Venues</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .RouteableClusters}}
+              <tr>
+                <td class="mono">{{.ClusterID}}</td>
+                <td>{{.Proposition}}</td>
+                <td><span class="pill">{{.Routeability}}</span></td>
+                <td>{{joinVenues .MarketInstances}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </article>
+
+        <article class="card">
+          <div class="eyebrow">Evaluation labels</div>
+          <h2>Built-in demo evidence</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .EvaluationRows}}
+              <tr>
+                <td>{{.Label}}</td>
+                <td class="mono">{{.ID}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </article>
+      </section>
+
+      <section class="card" style="margin-top: 1rem;">
+        <div class="eyebrow">All proposition clusters</div>
+        <h2>Cluster inventory</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Proposition</th>
+              <th>Routeability</th>
+              <th>Venues</th>
+              <th>Reasons</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Snapshot.Props}}
+            <tr>
+              <td class="mono">{{.ClusterID}}</td>
+              <td>{{.Proposition}}</td>
+              <td>
+                {{if eq .Routeability "routeable"}}
+                <span class="pill">{{.Routeability}}</span>
+                {{else}}
+                <span class="pill warn">{{.Routeability}}</span>
+                {{end}}
+              </td>
+              <td>{{joinVenues .MarketInstances}}</td>
+              <td>{{join .RefusalReasons "; "}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card" style="margin-top: 1rem;">
+        <div class="eyebrow">Default CLI decisions</div>
+        <h2>What the fixture demo already routes</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Cluster</th>
+              <th>Action</th>
+              <th>Selected venue</th>
+              <th>Reasons</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Snapshot.Decisions}}
+            <tr>
+              <td class="mono">{{.Order.PropositionClusterID}}</td>
+              <td>{{.Action}}</td>
+              <td>{{.SelectedVenue}}</td>
+              <td>{{join .Reasons "; "}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

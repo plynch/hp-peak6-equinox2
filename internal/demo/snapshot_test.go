@@ -1,4 +1,4 @@
-package main
+package demo
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestDeriveEvaluationLabelsPrefersExplicitNonMatchAssessment(t *testing.T) {
-	labels := deriveEvaluationLabels(
+	labels := DeriveEvaluationLabels(
 		[]model.EventCluster{{ClusterID: "event-001"}},
 		[]model.PropositionCluster{{ClusterID: "prop-001", Routeability: model.Routeable}},
 		[]model.EquivalenceAssessment{{AssessmentID: "assess-007", Classification: "explicit_non_match"}},

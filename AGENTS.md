@@ -50,7 +50,8 @@ Assume the following unless the task explicitly changes planning:
 - preferred implementation posture for this submission:
   - `Go 1.22+`
   - local-first
-  - CLI-first
+  - thin local web UI for demoability
+  - CLI retained for verification and scripted inspection
 
 ## Constraints
 

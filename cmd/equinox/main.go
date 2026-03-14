@@ -5,27 +5,28 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"equinox/internal/adapters/kalshi"
 	"equinox/internal/adapters/polymarket"
-	"equinox/internal/artifacts"
-	"equinox/internal/cluster"
+	"equinox/internal/demo"
 	"equinox/internal/model"
-	"equinox/internal/normalize"
-	"equinox/internal/router"
-	"equinox/internal/store"
+	"equinox/internal/web"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: equinox <fixture-demo|route-order|live-inspect>")
+		fmt.Println("usage: equinox <serve|fixture-demo|route-order|live-inspect>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
+	case "serve":
+		if err := runServe(); err != nil {
+			panic(err)
+		}
 	case "fixture-demo":
 		if err := runFixtureDemo(); err != nil {
 			panic(err)
@@ -44,52 +45,48 @@ func main() {
 	}
 }
 
-func loadFixtureState() ([]model.VenueMarketInstance, []model.EventCluster, []model.PropositionCluster, []model.EquivalenceAssessment, error) {
-	pmRows, err := (polymarket.Adapter{}).LoadFixture("testdata/fixtures/polymarket_markets.json")
+func runServe() error {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	addr := fs.String("addr", "127.0.0.1:8080", "server bind address")
+	_ = fs.Parse(os.Args[2:])
+
+	snapshot, err := demo.LoadFixtureSnapshot()
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return err
 	}
-	kRows, err := (kalshi.Adapter{}).LoadFixture("testdata/fixtures/kalshi_markets.json")
+	snapshot, err = demo.MaterializeSnapshot(context.Background(), "equinox.db", "artifacts", snapshot)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return err
 	}
-	instances := append(normalize.FromPolymarket(pmRows), normalize.FromKalshi(kRows)...)
-	events := cluster.BuildEventClusters(instances)
-	props, assessments := cluster.BuildPropositionClusters(events)
-	return instances, events, props, assessments, nil
+
+	app, err := web.New(snapshot)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Equinox demo UI available at http://%s\n", *addr)
+	fmt.Printf("artifact: %s\n", snapshot.ArtifactPath)
+	fmt.Println("press Ctrl+C to stop")
+
+	server := &http.Server{
+		Addr:              *addr,
+		Handler:           app.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	return server.ListenAndServe()
 }
 
 func runFixtureDemo() error {
-	instances, events, props, assessments, err := loadFixtureState()
+	snapshot, err := demo.LoadFixtureSnapshot()
 	if err != nil {
 		return err
 	}
-
-	orders := []model.HypotheticalOrder{}
-	for _, p := range props {
-		orders = append(orders, model.HypotheticalOrder{OrderID: p.ClusterID, PropositionClusterID: p.ClusterID, Side: "buy_yes", LimitProbability: 0.60, SizeNotional: 1000})
-	}
-	decisions := make([]model.RoutingDecision, 0, len(orders))
-	for _, o := range orders {
-		decisions = append(decisions, router.Simulate(o, props))
-	}
-
-	st, err := store.Open("equinox.db")
+	snapshot, err = demo.MaterializeSnapshot(context.Background(), "equinox.db", "artifacts", snapshot)
 	if err != nil {
 		return err
 	}
-	defer st.Close()
-	if err := st.PersistRun(context.Background(), events, props, assessments, decisions); err != nil {
-		return err
-	}
-
-	runDir := filepath.Join("artifacts", time.Now().UTC().Format("20060102-150405"))
-	eval := deriveEvaluationLabels(events, props, assessments)
-	if err := artifacts.Write(runDir, artifacts.Bundle{Instances: instances, Events: events, Props: props, Assessments: assessments, Decisions: decisions, Evaluation: eval}); err != nil {
-		return err
-	}
-	fmt.Printf("fixture demo complete\nartifact: %s/bundle.json\n\n", runDir)
-	printFixtureSummary(props, decisions)
+	fmt.Printf("fixture demo complete\nartifact: %s\n\n", snapshot.ArtifactPath)
+	printFixtureSummary(snapshot.Props, snapshot.Decisions)
 	return nil
 }
 
@@ -105,78 +102,23 @@ func runRouteOrder() error {
 		return fmt.Errorf("missing required --cluster flag")
 	}
 
-	_, _, props, _, err := loadFixtureState()
+	snapshot, err := demo.LoadFixtureSnapshot()
 	if err != nil {
 		return err
 	}
-
-	var target *model.PropositionCluster
-	for i := range props {
-		if props[i].ClusterID == *clusterID {
-			target = &props[i]
-			break
-		}
+	target, decision, err := demo.SimulateOrder(snapshot, *clusterID, *side, *limit, *size)
+	if err != nil {
+		return err
 	}
-	if target == nil {
-		return fmt.Errorf("unknown proposition cluster %q", *clusterID)
-	}
-
-	order := model.HypotheticalOrder{
-		OrderID:              "manual-" + *clusterID,
-		PropositionClusterID: *clusterID,
-		Side:                 *side,
-		LimitProbability:     *limit,
-		SizeNotional:         *size,
-	}
-	decision := router.Simulate(order, props)
 	out := map[string]any{
-		"order":      order,
-		"cluster":    target,
-		"decision":   decision,
+		"order":       decision.Order,
+		"cluster":     target,
+		"decision":    decision,
 		"how_to_read": "routeable clusters can accept buy_yes or sell_yes hypothetical orders; the router rejects clusters that are unsupported, ambiguous, event-only, or outside the order limit",
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
-}
-
-func deriveEvaluationLabels(events []model.EventCluster, props []model.PropositionCluster, assessments []model.EquivalenceAssessment) map[string]string {
-	labels := map[string]string{}
-	for _, p := range props {
-		switch p.Routeability {
-		case model.Routeable:
-			if labels["strong_route_safe_proposition_cluster"] == "" {
-				labels["strong_route_safe_proposition_cluster"] = p.ClusterID
-			}
-		case model.EventOnly:
-			if labels["near_match_or_event_only_case"] == "" {
-				labels["near_match_or_event_only_case"] = p.ClusterID
-			}
-		case model.Unsupported:
-			if labels["unsupported_shape_case"] == "" {
-				labels["unsupported_shape_case"] = p.ClusterID
-			}
-		case model.Ambiguous:
-			if labels["ambiguity_case"] == "" {
-				labels["ambiguity_case"] = p.ClusterID
-			}
-		}
-	}
-	for _, a := range assessments {
-		if a.Classification == "explicit_non_match" {
-			labels["clear_non_match_case"] = a.AssessmentID
-			break
-		}
-	}
-	if labels["clear_non_match_case"] == "" {
-		for _, e := range events {
-			if len(e.MarketInstances) == 1 {
-				labels["clear_non_match_case"] = e.ClusterID
-				break
-			}
-		}
-	}
-	return labels
 }
 
 func runLiveInspect() error {

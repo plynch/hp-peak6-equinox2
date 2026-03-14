@@ -5,6 +5,8 @@
 - `internal/normalize`: venue payload -> canonical `VenueMarketInstance`.
 - `internal/cluster`: canonical event and proposition clustering + equivalence assessments.
 - `internal/router`: route simulation from normalized proposition clusters only.
+- `internal/demo`: shared fixture snapshot construction, artifact materialization, and order simulation helpers.
+- `internal/web`: thin local demo UI over the shared demo snapshot.
 - `internal/store`: relational persistence boundary (SQLite file in this MVP environment).
 - `internal/artifacts`: inspectable JSON artifact emission.
 
@@ -41,6 +43,13 @@ PRD prefers PostgreSQL. In this execution environment, the MVP uses SQLite as an
 
 ## Venue-agnostic router guarantee
 Router scoring uses normalized quote/depth fields from proposition clusters and does not branch on venue names or venue-native payload shapes. Router also hard-rejects non-executable candidates that violate the hypothetical order limit.
+
+## Demo surface choice
+The repository now has both:
+- a CLI path for deterministic checks and artifact inspection
+- a thin local web UI for reviewer/demo usability
+
+The web UI is intentionally not a separate product architecture. It is a thin layer over the same shared demo snapshot used by the CLI.
 
 ## Known limitations
 - Canonical key derivation remains heuristic and fixture-calibrated.

@@ -98,7 +98,7 @@ Never block the full implementation on Docker-in-Docker assumptions.
 
 Primary objective:
 
-- a working Go CLI prototype with deterministic fixture execution and passing tests
+- a working Go prototype with deterministic fixture execution, passing tests, and an easy local demo surface
 
 Secondary objective:
 
@@ -117,7 +117,8 @@ Language and posture:
 
 - `Go 1.22+`
 - stdlib-first unless a dependency materially improves correctness or speed
-- CLI-first
+- thin local web UI for demoability
+- CLI retained for verification and scripted inspection
 - local-first
 
 Suggested repository shape:
@@ -338,6 +339,6 @@ The task is done when the repository contains a coherent, PR-ready MVP with:
 
 ## Implementation Notes (Current)
 
-- Implemented with Go 1.22 CLI-first structure.
+- Implemented with Go 1.22 with a thin local web UI over the same fixture-backed engine.
 - Implemented relational persistence boundary with SQLite fallback (`internal/store`) to keep deterministic local execution in this environment while preserving clean store abstraction.
-- Fixture-first demo is primary (`fixture-demo`), optional live inspect command included.
+- Fixture-first demo is primary (`make dev` for the browser demo, `fixture-demo` and `route-order` for CLI inspection), optional live inspect command included.
