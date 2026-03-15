@@ -21,7 +21,8 @@ help:
 	@echo "  make dev-live-fed FED_MEETINGS=4      # start the web UI backed by live Fed data"
 	@echo "  make demo-cli                         # run the full terminal showcase across fixture + live-fed + live-epl"
 	@echo "  make verify                           # run tests and fixture demo"
-	@echo "  make scan SOURCE=fixture              # source-aware terminal scan (fixture, live-fed, live-epl, all-live)"
+	@echo "  make scan                             # default operator scan across all supported live sources"
+	@echo "  make scan SOURCE=fixture              # source-aware scan (fixture, live-fed, live-epl, all-live)"
 	@echo "  make showcase                         # run fixture + live-fed + live-epl terminal demo"
 	@echo "  make list-clusters ROUTEABLE_ONLY=1   # inspect current routeable proposition clusters"
 	@echo "  make route-order CLUSTER=prop-001"
@@ -53,7 +54,7 @@ fixture-demo:
 	go run ./cmd/equinox fixture-demo
 
 scan:
-	go run ./cmd/equinox scan --source $(SOURCE) --matchweeks $(LIVE_MATCHWEEKS) --meetings $(FED_MEETINGS)
+	go run ./cmd/equinox scan --source $(if $(filter fixture,$(SOURCE)),all-live,$(SOURCE)) --matchweeks $(LIVE_MATCHWEEKS) --meetings $(FED_MEETINGS)
 
 showcase:
 	go run ./cmd/equinox showcase --matchweeks $(LIVE_MATCHWEEKS) --meetings $(FED_MEETINGS)

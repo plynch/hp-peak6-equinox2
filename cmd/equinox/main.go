@@ -21,8 +21,13 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: equinox <serve|scan|showcase|fixture-demo|list-clusters|route-order|live-inspect|live-epl|live-fed>")
-		os.Exit(1)
+		printMainUsage()
+		return
+	}
+	switch os.Args[1] {
+	case "help", "-h", "--help":
+		printMainUsage()
+		return
 	}
 	switch os.Args[1] {
 	case "serve":
@@ -62,8 +67,9 @@ func main() {
 			panic(err)
 		}
 	default:
-		fmt.Println("unknown command")
-		os.Exit(1)
+		fmt.Printf("unknown command %q\n\n", os.Args[1])
+		printMainUsage()
+		os.Exit(2)
 	}
 }
 
@@ -104,7 +110,7 @@ func runServe() error {
 
 func runScan() error {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
-	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, live-fed, or all-live")
+	source := fs.String("source", "all-live", "snapshot source: fixture, live-epl, live-fed, or all-live")
 	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
 	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
 	_ = fs.Parse(os.Args[2:])
@@ -502,6 +508,37 @@ func sourceHeading(source string) string {
 	default:
 		return strings.ToUpper(source)
 	}
+}
+
+func printMainUsage() {
+	fmt.Println("Equinox CLI")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  equinox <command> [flags]")
+	fmt.Println()
+	fmt.Println("Commands:")
+	fmt.Println("  serve         Start the local demo web UI")
+	fmt.Println("  scan          Scan fixture, live-fed, live-epl, or all-live and print routeable events")
+	fmt.Println("  showcase      Run the full terminal showcase across fixture + live-fed + live-epl")
+	fmt.Println("  fixture-demo  Materialize the deterministic fixture snapshot")
+	fmt.Println("  list-clusters List proposition clusters for a source")
+	fmt.Println("  route-order   Simulate a hypothetical order against a routeable proposition cluster")
+	fmt.Println("  live-inspect  Check current public API ingestion viability")
+	fmt.Println("  live-fed      Run the live Fed scan directly")
+	fmt.Println("  live-epl      Run the live EPL scan directly")
+	fmt.Println()
+	fmt.Println("Best first commands:")
+	fmt.Println("  equinox scan")
+	fmt.Println("  equinox route-order --source live-epl --event-query 'liverpool vs tottenham' --prop-query 'liverpool win' --limit 0.76 --size 77")
+	fmt.Println("  equinox serve")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  equinox scan --source all-live --meetings 2 --matchweeks 1")
+	fmt.Println("  equinox scan --source live-fed --meetings 2")
+	fmt.Println("  equinox list-clusters --source live-epl --matchweeks 1 --routeable-only")
+	fmt.Println("  equinox route-order --source live-epl --event-query 'liverpool vs tottenham' --prop-query 'liverpool win' --limit 0.76 --size 77")
+	fmt.Println()
+	fmt.Println("Use '<command> -h' for subcommand flags.")
 }
 
 func joinVenues(instances []model.VenueMarketInstance) string {

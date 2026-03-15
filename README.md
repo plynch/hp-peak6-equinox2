@@ -13,6 +13,27 @@ Additional docs:
 - `docs/ARCHITECTURE.md`
 - `docs/DEMO.md`
 
+## Relearn The CLI Fast
+
+If you are coming back to this cold, use this order:
+
+```bash
+make
+make scan
+make route-order SOURCE=live-epl EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=77
+make dev
+```
+
+What those do:
+- `make`
+  - prints the available operator targets
+- `make scan`
+  - prints every currently routeable live event across the supported Fed and EPL domains, sorted by soonest resolution
+- `make route-order ...`
+  - simulates one concrete routing decision from the terminal
+- `make dev`
+  - starts the deterministic local web UI
+
 ## What this MVP demonstrates
 - Fixture-backed ingestion of metadata and quote/order-book-like fields.
 - Ongoing live Premier League ingestion from Polymarket and Kalshi public APIs.
@@ -68,6 +89,12 @@ To see the available operator commands:
 make
 ```
 
+To see the CLI-native help:
+
+```bash
+go run ./cmd/equinox help
+```
+
 Outputs:
 - SQLite DB: `equinox.db`
 - Artifacts: `artifacts/<timestamp>/bundle.json`
@@ -85,6 +112,8 @@ Outputs:
   - Runs `go test ./...` plus the deterministic fixture CLI flow.
 - `make`
   - Prints the supported demo and operator targets.
+- `make scan`
+  - Default operator view. Scans `all-live` and prints every currently routeable live event across Fed and EPL, sorted by soonest resolution.
 - `make scan SOURCE=live-fed`
   - Runs the source-aware terminal scan for a single source (`fixture`, `live-fed`, `live-epl`, or `all-live`).
 - `make scan SOURCE=all-live FED_MEETINGS=2 LIVE_MATCHWEEKS=1`
@@ -128,7 +157,7 @@ Outputs:
   - `prop-009`: `tottenham win` for `Liverpool vs Tottenham`
 - In the live EPL scan, routeable clusters are discovered dynamically from the current upcoming slate and can include many matched match-outcome propositions across both venues.
 - In the live Fed scan, routeable clusters are discovered dynamically from the current plus next few open meetings and currently include exact overlaps like `fed no change`, `fed cut exactly 25bps`, and `fed cut more than 25bps`.
-- Because live identifiers and prices move, the preferred live operator flow is `make scan SOURCE=live-fed ...`, `make scan SOURCE=live-epl ...`, or `make scan SOURCE=all-live ...`, then copy the selector-ready `make route-order ...` command it prints.
+- Because live identifiers and prices move, the preferred live operator flow is `make scan`, `make scan SOURCE=live-fed ...`, or `make scan SOURCE=live-epl ...`, then copy the selector-ready `make route-order ...` command it prints.
 - If the public APIs expose fewer than 4 upcoming matchweek-style windows, the live scan returns whatever overlap is currently available.
 - The router refuses:
   - unsupported clusters
