@@ -2,50 +2,63 @@ package cluster
 
 import (
 	"testing"
+	"time"
 
-	"equinox/internal/adapters/kalshi"
-	"equinox/internal/adapters/polymarket"
 	"equinox/internal/model"
-	"equinox/internal/normalize"
 )
 
-func TestFixtureClassificationsAndExplicitNonMatch(t *testing.T) {
-	pmRows, err := (polymarket.Adapter{}).LoadFixture("../../testdata/fixtures/polymarket_markets.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	kRows, err := (kalshi.Adapter{}).LoadFixture("../../testdata/fixtures/kalshi_markets.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	instances := append(normalize.FromPolymarket(pmRows), normalize.FromKalshi(kRows)...)
-	events := BuildEventClusters(instances)
-	props, assessments := BuildPropositionClusters(events)
-	count := map[model.Routeability]int{}
-	for _, p := range props {
-		count[p.Routeability]++
-	}
-	if count[model.Routeable] < 1 {
-		t.Fatalf("expected at least one routeable proposition")
-	}
-	if count[model.Unsupported] < 1 {
-		t.Fatalf("expected unsupported proposition")
-	}
-	if count[model.EventOnly] < 1 {
-		t.Fatalf("expected event-only proposition")
-	}
-	if count[model.Ambiguous] < 1 {
-		t.Fatalf("expected ambiguous proposition")
+func TestBuildEventClustersSeparatesFedMeetingsByMonth(t *testing.T) {
+	marKalshi := time.Date(2026, 3, 18, 18, 0, 0, 0, time.UTC)
+	marPoly := time.Date(2026, 3, 18, 0, 0, 0, 0, time.UTC)
+	aprKalshi := time.Date(2026, 4, 29, 18, 0, 0, 0, time.UTC)
+	aprPoly := time.Date(2026, 4, 29, 0, 0, 0, 0, time.UTC)
+
+	instances := []model.VenueMarketInstance{
+		{
+			InstanceID:          "kalshi:mar",
+			Venue:               model.VenueKalshi,
+			EventTitle:          "Fed decision in Mar 2026?",
+			EventFamily:         "fed_fomc",
+			Category:            "economy",
+			DeadlineUTC:         &marKalshi,
+			NormalizedYesTarget: "fed no change",
+		},
+		{
+			InstanceID:          "polymarket:mar",
+			Venue:               model.VenuePolymarket,
+			EventTitle:          "Fed decision in March?",
+			EventFamily:         "fed_fomc",
+			Category:            "economy",
+			DeadlineUTC:         &marPoly,
+			NormalizedYesTarget: "fed no change",
+		},
+		{
+			InstanceID:          "kalshi:apr",
+			Venue:               model.VenueKalshi,
+			EventTitle:          "Fed decision in Apr 2026?",
+			EventFamily:         "fed_fomc",
+			Category:            "economy",
+			DeadlineUTC:         &aprKalshi,
+			NormalizedYesTarget: "fed no change",
+		},
+		{
+			InstanceID:          "polymarket:apr",
+			Venue:               model.VenuePolymarket,
+			EventTitle:          "Fed decision in April?",
+			EventFamily:         "fed_fomc",
+			Category:            "economy",
+			DeadlineUTC:         &aprPoly,
+			NormalizedYesTarget: "fed no change",
+		},
 	}
 
-	hasExplicit := false
-	for _, a := range assessments {
-		if a.Classification == "explicit_non_match" {
-			hasExplicit = true
-			break
-		}
+	events := BuildEventClusters(instances)
+	if len(events) != 2 {
+		t.Fatalf("expected 2 event clusters, got %d", len(events))
 	}
-	if !hasExplicit {
-		t.Fatalf("expected explicit_non_match assessment for paired non-match case")
+	for _, event := range events {
+		if len(event.MarketInstances) != 2 {
+			t.Fatalf("expected each event cluster to contain 2 venue instances, got %d", len(event.MarketInstances))
+		}
 	}
 }

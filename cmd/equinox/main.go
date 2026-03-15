@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"equinox/internal/adapters/kalshi"
@@ -19,12 +20,20 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: equinox <serve|fixture-demo|list-clusters|route-order|live-inspect|live-epl>")
+		fmt.Println("usage: equinox <serve|scan|showcase|fixture-demo|list-clusters|route-order|live-inspect|live-epl|live-fed>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
 	case "serve":
 		if err := runServe(); err != nil {
+			panic(err)
+		}
+	case "scan":
+		if err := runScan(); err != nil {
+			panic(err)
+		}
+	case "showcase":
+		if err := runShowcase(); err != nil {
 			panic(err)
 		}
 	case "fixture-demo":
@@ -47,6 +56,10 @@ func main() {
 		if err := runLivePremierLeague(); err != nil {
 			panic(err)
 		}
+	case "live-fed":
+		if err := runLiveFed(); err != nil {
+			panic(err)
+		}
 	default:
 		fmt.Println("unknown command")
 		os.Exit(1)
@@ -56,11 +69,12 @@ func main() {
 func runServe() error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:8080", "server bind address")
-	source := fs.String("source", "fixture", "snapshot source: fixture or live-epl")
+	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, or live-fed")
 	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
+	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
 	_ = fs.Parse(os.Args[2:])
 
-	snapshot, err := loadSnapshotForSource(*source, *matchweeks)
+	snapshot, err := loadSnapshotForSource(*source, *matchweeks, *meetings)
 	if err != nil {
 		return err
 	}
@@ -87,6 +101,67 @@ func runServe() error {
 	return server.ListenAndServe()
 }
 
+func runScan() error {
+	fs := flag.NewFlagSet("scan", flag.ExitOnError)
+	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, or live-fed")
+	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
+	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
+	_ = fs.Parse(os.Args[2:])
+
+	snapshot, err := loadSnapshotForSource(*source, *matchweeks, *meetings)
+	if err != nil {
+		return err
+	}
+	snapshot, err = demo.MaterializeSnapshot(context.Background(), "equinox.db", "artifacts", snapshot)
+	if err != nil {
+		return err
+	}
+	return printScanSummary(*source, snapshot, *matchweeks, *meetings)
+}
+
+func runShowcase() error {
+	fs := flag.NewFlagSet("showcase", flag.ExitOnError)
+	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch")
+	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch")
+	_ = fs.Parse(os.Args[2:])
+
+	sources := []string{"fixture", "live-fed", "live-epl"}
+	var firstErr error
+	successes := 0
+	for i, source := range sources {
+		snapshot, err := loadSnapshotForSource(source, *matchweeks, *meetings)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			fmt.Printf("\n=== %s ===\nerror: %v\n", sourceHeading(source), err)
+			continue
+		}
+		snapshot, err = demo.MaterializeSnapshot(context.Background(), "equinox.db", "artifacts", snapshot)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			fmt.Printf("\n=== %s ===\nerror: %v\n", sourceHeading(source), err)
+			continue
+		}
+		if i > 0 {
+			fmt.Println()
+		}
+		successes++
+		if err := printScanSummary(source, snapshot, *matchweeks, *meetings); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		if i < len(sources)-1 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+	if successes == 0 {
+		return firstErr
+	}
+	return nil
+}
+
 func runFixtureDemo() error {
 	snapshot, err := demo.LoadFixtureSnapshot()
 	if err != nil {
@@ -97,31 +172,38 @@ func runFixtureDemo() error {
 		return err
 	}
 	fmt.Printf("fixture demo complete\nartifact: %s\n\n", snapshot.ArtifactPath)
-	printFixtureSummary(snapshot.Events, snapshot.Props, snapshot.Decisions)
+	printFixtureSummary(snapshot)
 	return nil
 }
 
 func runRouteOrder() error {
 	fs := flag.NewFlagSet("route-order", flag.ExitOnError)
+	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, or live-fed")
+	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
+	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
 	clusterID := fs.String("cluster", "", "proposition cluster id to route against (for example prop-001)")
+	eventQuery := fs.String("event-query", "", "case-insensitive event title selector used when --cluster is not provided")
+	propQuery := fs.String("prop-query", "", "case-insensitive proposition selector used when --cluster is not provided")
 	side := fs.String("side", "buy_yes", "hypothetical order side: buy_yes or sell_yes")
 	limit := fs.Float64("limit", 0.60, "limit probability")
 	size := fs.Float64("size", 1000, "size notional")
 	_ = fs.Parse(os.Args[2:])
 
-	if *clusterID == "" {
-		return fmt.Errorf("missing required --cluster flag; run `make list-clusters ROUTEABLE_ONLY=1` first")
-	}
-
-	snapshot, err := demo.LoadFixtureSnapshot()
+	snapshot, err := loadSnapshotForSource(*source, *matchweeks, *meetings)
 	if err != nil {
 		return err
 	}
-	target, decision, err := demo.SimulateOrder(snapshot, *clusterID, *side, *limit, *size)
+	selectedClusterID, err := resolveClusterID(snapshot, *source, *clusterID, *eventQuery, *propQuery)
+	if err != nil {
+		return err
+	}
+
+	target, decision, err := demo.SimulateOrder(snapshot, selectedClusterID, *side, *limit, *size)
 	if err != nil {
 		return err
 	}
 	out := map[string]any{
+		"source":      *source,
 		"order":       decision.Order,
 		"cluster":     target,
 		"decision":    decision,
@@ -134,10 +216,13 @@ func runRouteOrder() error {
 
 func runListClusters() error {
 	fs := flag.NewFlagSet("list-clusters", flag.ExitOnError)
+	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, or live-fed")
+	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
+	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
 	routeableOnly := fs.Bool("routeable-only", false, "show only routeable proposition clusters")
 	_ = fs.Parse(os.Args[2:])
 
-	snapshot, err := demo.LoadFixtureSnapshot()
+	snapshot, err := loadSnapshotForSource(*source, *matchweeks, *meetings)
 	if err != nil {
 		return err
 	}
@@ -206,15 +291,36 @@ func runLivePremierLeague() error {
 	return nil
 }
 
-func printFixtureSummary(events []model.EventCluster, props []model.PropositionCluster, decisions []model.RoutingDecision) {
+func runLiveFed() error {
+	fs := flag.NewFlagSet("live-fed", flag.ExitOnError)
+	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch")
+	_ = fs.Parse(os.Args[2:])
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	snapshot, err := demo.LoadLiveFedSnapshot(ctx, *meetings)
+	if err != nil {
+		return err
+	}
+	snapshot, err = demo.MaterializeSnapshot(context.Background(), "equinox.db", "artifacts", snapshot)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("live fed snapshot complete\nartifact: %s\n\n", snapshot.ArtifactPath)
+	return printScanSummary("live-fed", snapshot, 0, *meetings)
+}
+
+func printFixtureSummary(snapshot demo.Snapshot) {
 	eventTitles := map[string]string{}
-	for _, event := range events {
+	for _, event := range snapshot.Events {
 		eventTitles[event.ClusterID] = event.Title
 	}
 
 	fmt.Println("routeable proposition clusters:")
 	foundRouteable := false
-	for _, p := range props {
+	for _, p := range snapshot.Props {
 		if p.Routeability != model.Routeable {
 			continue
 		}
@@ -227,19 +333,19 @@ func printFixtureSummary(events []model.EventCluster, props []model.PropositionC
 
 	fmt.Println("\nexample route-order usage:")
 	fmt.Println("  make list-clusters ROUTEABLE_ONLY=1")
-	for _, p := range props {
+	for _, p := range snapshot.Props {
 		if p.Routeability == model.Routeable {
 			if buyLimit, ok := bestBuyLimit(p); ok {
-				fmt.Printf("  make route-order CLUSTER=%s SIDE=buy_yes LIMIT=%.2f SIZE=1000\n", p.ClusterID, buyLimit)
+				fmt.Printf("  %s\n", makeRouteCommand(snapshot, "fixture", 0, 0, p, "buy_yes", buyLimit))
 			}
 			if sellLimit, ok := bestSellLimit(p); ok {
-				fmt.Printf("  make route-order CLUSTER=%s SIDE=sell_yes LIMIT=%.2f SIZE=1000\n", p.ClusterID, sellLimit)
+				fmt.Printf("  %s\n", makeRouteCommand(snapshot, "fixture", 0, 0, p, "sell_yes", sellLimit))
 			}
 		}
 	}
 
 	fmt.Println("\ncurrent demo routing outcomes:")
-	for _, d := range decisions {
+	for _, d := range snapshot.Decisions {
 		fmt.Printf("- %s | %s | %s\n", d.Order.PropositionClusterID, d.Action, strings.Join(d.Reasons, "; "))
 	}
 }
@@ -289,7 +395,7 @@ func printLivePremierLeagueSummary(snapshot demo.Snapshot, matchweeks int) {
 	fmt.Printf("  make dev-live-epl LIVE_MATCHWEEKS=%d\n", matchweeks)
 }
 
-func loadSnapshotForSource(source string, matchweeks int) (demo.Snapshot, error) {
+func loadSnapshotForSource(source string, matchweeks int, meetings int) (demo.Snapshot, error) {
 	switch source {
 	case "fixture":
 		return demo.LoadFixtureSnapshot()
@@ -297,8 +403,89 @@ func loadSnapshotForSource(source string, matchweeks int) (demo.Snapshot, error)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return demo.LoadLivePremierLeagueSnapshot(ctx, matchweeks)
+	case "live-fed":
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return demo.LoadLiveFedSnapshot(ctx, meetings)
 	default:
 		return demo.Snapshot{}, fmt.Errorf("unknown source %q", source)
+	}
+}
+
+func printScanSummary(source string, snapshot demo.Snapshot, matchweeks int, meetings int) error {
+	fmt.Printf("=== %s ===\n", sourceHeading(source))
+	fmt.Printf("artifact: %s\n", snapshot.ArtifactPath)
+	fmt.Printf("event clusters: %d | proposition clusters: %d | routeable: %d | assessments: %d\n", len(snapshot.Events), len(snapshot.Props), countRouteable(snapshot.Props), len(snapshot.Assessments))
+	switch source {
+	case "live-epl":
+		fmt.Printf("window: current + next %d matchweek-style windows\n", matchweeks)
+	case "live-fed":
+		fmt.Printf("window: current + next %d Fed meetings\n", meetings)
+	}
+
+	eventTitles := map[string]string{}
+	for _, event := range snapshot.Events {
+		eventTitles[event.ClusterID] = event.Title
+	}
+
+	fmt.Println("\nrouteable proposition clusters:")
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "CLUSTER\tEVENT\tPROPOSITION\tVENUES")
+	routeableCount := 0
+	for _, prop := range snapshot.Props {
+		if prop.Routeability != model.Routeable {
+			continue
+		}
+		routeableCount++
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", prop.ClusterID, eventTitles[prop.EventClusterID], prop.Proposition, joinVenues(prop.MarketInstances))
+	}
+	_ = tw.Flush()
+	if routeableCount == 0 {
+		fmt.Println("(none)")
+	}
+
+	fmt.Println("\nmarketable routing outcomes:")
+	tw = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "CLUSTER\tSIDE\tLIMIT\tACTION\tVENUE\tREASONS")
+	decisionCount := 0
+	for _, d := range snapshot.Decisions {
+		if d.Action != "route" {
+			continue
+		}
+		decisionCount++
+		fmt.Fprintf(tw, "%s\t%s\t%.2f\t%s\t%s\t%s\n", d.Order.PropositionClusterID, d.Order.Side, d.Order.LimitProbability, d.Action, d.SelectedVenue, strings.Join(d.Reasons, "; "))
+	}
+	_ = tw.Flush()
+	if decisionCount == 0 {
+		fmt.Println("(none)")
+	}
+
+	fmt.Println("\nnext commands:")
+	switch source {
+	case "fixture":
+		fmt.Println("  make list-clusters ROUTEABLE_ONLY=1")
+		printSuggestedRouteCommands(snapshot, source, matchweeks, meetings)
+	case "live-epl":
+		fmt.Printf("  make list-clusters ROUTEABLE_ONLY=1 SOURCE=live-epl LIVE_MATCHWEEKS=%d\n", matchweeks)
+		printSuggestedRouteCommands(snapshot, source, matchweeks, meetings)
+		fmt.Printf("  make dev-live-epl LIVE_MATCHWEEKS=%d\n", matchweeks)
+	case "live-fed":
+		fmt.Printf("  make list-clusters ROUTEABLE_ONLY=1 SOURCE=live-fed FED_MEETINGS=%d\n", meetings)
+		printSuggestedRouteCommands(snapshot, source, matchweeks, meetings)
+	}
+	return nil
+}
+
+func sourceHeading(source string) string {
+	switch source {
+	case "fixture":
+		return "FIXTURE SNAPSHOT"
+	case "live-epl":
+		return "LIVE PREMIER LEAGUE"
+	case "live-fed":
+		return "LIVE FED DECISIONS"
+	default:
+		return strings.ToUpper(source)
 	}
 }
 
@@ -322,6 +509,91 @@ func countRouteable(props []model.PropositionCluster) int {
 		}
 	}
 	return count
+}
+
+func resolveClusterID(snapshot demo.Snapshot, source, clusterID, eventQuery, propQuery string) (string, error) {
+	if clusterID != "" {
+		return clusterID, nil
+	}
+	if eventQuery == "" && propQuery == "" {
+		return "", fmt.Errorf("missing required selector; provide --cluster or a combination of --event-query/--prop-query. Run `equinox list-clusters --source %s --routeable-only` first", source)
+	}
+
+	eventTitles := map[string]string{}
+	for _, event := range snapshot.Events {
+		eventTitles[event.ClusterID] = event.Title
+	}
+
+	matches := make([]model.PropositionCluster, 0)
+	for _, prop := range snapshot.Props {
+		if prop.Routeability != model.Routeable {
+			continue
+		}
+		if eventQuery != "" && !containsFold(eventTitles[prop.EventClusterID], eventQuery) {
+			continue
+		}
+		if propQuery != "" && !containsFold(prop.Proposition, propQuery) {
+			continue
+		}
+		matches = append(matches, prop)
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no routeable proposition cluster matched event-query=%q prop-query=%q. Run `equinox list-clusters --source %s --routeable-only` first", eventQuery, propQuery, source)
+	case 1:
+		return matches[0].ClusterID, nil
+	default:
+		lines := make([]string, 0, len(matches))
+		for _, match := range matches {
+			lines = append(lines, fmt.Sprintf("%s (%s | %s)", match.ClusterID, eventTitles[match.EventClusterID], match.Proposition))
+		}
+		return "", fmt.Errorf("selector was ambiguous; matched %d routeable proposition clusters: %s", len(matches), strings.Join(lines, "; "))
+	}
+}
+
+func containsFold(haystack, needle string) bool {
+	return strings.Contains(strings.ToLower(haystack), strings.ToLower(strings.TrimSpace(needle)))
+}
+
+func printSuggestedRouteCommands(snapshot demo.Snapshot, source string, matchweeks int, meetings int) {
+	for _, prop := range snapshot.Props {
+		if prop.Routeability != model.Routeable {
+			continue
+		}
+		if buyLimit, ok := bestBuyLimit(prop); ok {
+			fmt.Printf("  %s\n", makeRouteCommand(snapshot, source, matchweeks, meetings, prop, "buy_yes", buyLimit))
+		}
+		break
+	}
+}
+
+func makeRouteCommand(snapshot demo.Snapshot, source string, matchweeks int, meetings int, prop model.PropositionCluster, side string, limit float64) string {
+	eventTitle := ""
+	for _, event := range snapshot.Events {
+		if event.ClusterID == prop.EventClusterID {
+			eventTitle = event.Title
+			break
+		}
+	}
+	args := []string{"make route-order"}
+	if source != "fixture" {
+		args = append(args, fmt.Sprintf("SOURCE=%s", source))
+	}
+	if source == "live-epl" {
+		args = append(args, fmt.Sprintf("LIVE_MATCHWEEKS=%d", matchweeks))
+	}
+	if source == "live-fed" {
+		args = append(args, fmt.Sprintf("FED_MEETINGS=%d", meetings))
+	}
+	args = append(args,
+		fmt.Sprintf("EVENT_QUERY='%s'", eventTitle),
+		fmt.Sprintf("PROP_QUERY='%s'", prop.Proposition),
+		fmt.Sprintf("SIDE=%s", side),
+		fmt.Sprintf("LIMIT=%.2f", limit),
+		"SIZE=1000",
+	)
+	return strings.Join(args, " ")
 }
 
 func bestBuyLimit(prop model.PropositionCluster) (float64, bool) {

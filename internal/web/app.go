@@ -247,6 +247,8 @@ func sourceLabel(source string) string {
 	switch source {
 	case "live-epl":
 		return "Live Premier League"
+	case "live-fed":
+		return "Live Fed decisions"
 	default:
 		return "Fixture snapshot"
 	}
@@ -256,6 +258,8 @@ func sourceDescription(source string) string {
 	switch source {
 	case "live-epl":
 		return "This local UI is backed by a live Premier League snapshot fetched from the current public Polymarket and Kalshi APIs."
+	case "live-fed":
+		return "This local UI is backed by a live Fed-decision snapshot fetched from the current public Polymarket and Kalshi APIs."
 	default:
 		return "This local UI is fixture-backed for deterministic review and is built on the same Go engine as the CLI."
 	}

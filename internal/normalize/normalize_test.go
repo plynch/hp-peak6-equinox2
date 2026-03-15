@@ -136,3 +136,107 @@ func TestCanonicalizesShortTeamNamesAcrossVenues(t *testing.T) {
 		t.Fatalf("winner markets should not be marked unsupported when rules contain 'Otherwise'")
 	}
 }
+
+func TestPreservesLeedsNameWhenNormalizingWinnerTargets(t *testing.T) {
+	pmRows := []polymarket.RawMarket{
+		{
+			EventID:      "pm-epl-3",
+			EventTitle:   "Leeds United vs Brentford",
+			EventFamily:  "soccer_big_five",
+			MarketID:     "pm-leeds",
+			Question:     "Will Leeds United win on 2026-03-15?",
+			Category:     "sports",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "90 minutes plus stoppage time only.",
+			EndDateISO:   "2026-03-15T16:30:00Z",
+			QuoteYesAsk:  0.38,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+	}
+
+	pm := FromPolymarket(pmRows)
+	if pm[0].NormalizedYesTarget != "leeds united win" {
+		t.Fatalf("expected polymarket normalized target to preserve leeds united, got %q", pm[0].NormalizedYesTarget)
+	}
+}
+
+func TestDerivesComparableFedDecisionTargetsAcrossVenues(t *testing.T) {
+	pmRows := []polymarket.RawMarket{
+		{
+			EventID:      "pm-fed-mar",
+			EventTitle:   "Fed decision in March?",
+			EventFamily:  "fed_fomc",
+			MarketID:     "pm-fed-no-change",
+			Question:     "Will there be no change in Fed interest rates after the March 2026 meeting?",
+			Category:     "economy",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "Resolved from the FOMC statement.",
+			EndDateISO:   "2026-03-18T00:00:00Z",
+			QuoteYesAsk:  0.99,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+		{
+			EventID:      "pm-fed-mar",
+			EventTitle:   "Fed decision in March?",
+			EventFamily:  "fed_fomc",
+			MarketID:     "pm-fed-hike",
+			Question:     "Will the Fed increase interest rates by 25+ bps after the March 2026 meeting?",
+			Category:     "economy",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "Resolved from the FOMC statement.",
+			EndDateISO:   "2026-03-18T00:00:00Z",
+			QuoteYesAsk:  0.01,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+	}
+	kalshiRows := []kalshi.RawMarket{
+		{
+			EventID:      "k-fed-mar",
+			EventTitle:   "Fed decision in Mar 2026?",
+			EventFamily:  "fed_fomc",
+			MarketTicker: "KXFEDDECISION-26MAR-H0",
+			Title:        "Will the Federal Reserve Hike rates by 0bps at their March 2026 meeting?",
+			YesSubTitle:  "Hike 0bps",
+			Category:     "economy",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "Resolved from the FOMC statement.",
+			CloseTimeISO: "2026-03-18T18:00:00Z",
+			YesAskCents:  100,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+		{
+			EventID:      "k-fed-mar",
+			EventTitle:   "Fed decision in Mar 2026?",
+			EventFamily:  "fed_fomc",
+			MarketTicker: "KXFEDDECISION-26MAR-H25",
+			Title:        "Will the Federal Reserve Hike rates by 25bps at their March 2026 meeting?",
+			YesSubTitle:  "Hike 25bps",
+			Category:     "economy",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "Resolved from the FOMC statement.",
+			CloseTimeISO: "2026-03-18T18:00:00Z",
+			YesAskCents:  1,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+	}
+
+	pm := FromPolymarket(pmRows)
+	ka := FromKalshi(kalshiRows)
+	if pm[0].NormalizedYesTarget != "fed no change" {
+		t.Fatalf("expected polymarket no-change target, got %q", pm[0].NormalizedYesTarget)
+	}
+	if ka[0].NormalizedYesTarget != "fed no change" {
+		t.Fatalf("expected kalshi no-change target, got %q", ka[0].NormalizedYesTarget)
+	}
+	if pm[1].NormalizedYesTarget != "fed hike at least 25bps" {
+		t.Fatalf("expected polymarket hike target, got %q", pm[1].NormalizedYesTarget)
+	}
+	if ka[1].NormalizedYesTarget != "fed hike exactly 25bps" {
+		t.Fatalf("expected kalshi exact-hike target, got %q", ka[1].NormalizedYesTarget)
+	}
+}

@@ -223,12 +223,12 @@ func eventSimilarity(a model.VenueMarketInstance, members []model.VenueMarketIns
 	for _, m := range members {
 		s := 0.0
 		if strings.EqualFold(a.EventFamily, m.EventFamily) {
-			s += 0.35
+			s += 0.18
 		}
 		if strings.EqualFold(a.Category, m.Category) {
-			s += 0.10
+			s += 0.07
 		}
-		s += 0.45 * jaccard(tokens(a.EventTitle), tokens(m.EventTitle))
+		s += 0.65 * jaccard(tokens(a.EventTitle), tokens(m.EventTitle))
 		if closeDeadline(a.DeadlineUTC, m.DeadlineUTC, 72*time.Hour) {
 			s += 0.10
 		}
@@ -333,14 +333,20 @@ func confidenceEvent(ms []model.VenueMarketInstance) float64 {
 
 func tokens(s string) []string {
 	s = strings.ToLower(strings.TrimSpace(s))
-	repl := strings.NewReplacer("/", " ", "-", " ", "_", " ", ":", " ", ",", " ", ".", " ", "?", " ", "!", " ")
+	repl := strings.NewReplacer("/", " ", "-", " ", "_", " ", ":", " ", ",", " ", ".", " ", "?", " ", "!", " ", "&", " ")
 	s = repl.Replace(s)
 	parts := strings.Fields(s)
-	stop := map[string]bool{"the": true, "a": true, "an": true, "will": true, "at": true, "in": true, "vs": true}
+	stop := map[string]bool{"the": true, "a": true, "an": true, "will": true, "at": true, "in": true, "vs": true, "fc": true, "afc": true}
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		if stop[p] {
 			continue
+		}
+		if isNumericToken(p) {
+			continue
+		}
+		if month := canonicalMonthToken(p); month != "" {
+			p = month
 		}
 		out = append(out, p)
 	}
@@ -395,4 +401,44 @@ func dedupe(in []string) []string {
 		}
 	}
 	return out
+}
+
+func canonicalMonthToken(token string) string {
+	switch token {
+	case "january", "jan":
+		return "jan"
+	case "february", "feb":
+		return "feb"
+	case "march", "mar":
+		return "mar"
+	case "april", "apr":
+		return "apr"
+	case "may":
+		return "may"
+	case "june", "jun":
+		return "jun"
+	case "july", "jul":
+		return "jul"
+	case "august", "aug":
+		return "aug"
+	case "september", "sep":
+		return "sep"
+	case "october", "oct":
+		return "oct"
+	case "november", "nov":
+		return "nov"
+	case "december", "dec":
+		return "dec"
+	default:
+		return ""
+	}
+}
+
+func isNumericToken(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
 }

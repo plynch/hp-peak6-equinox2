@@ -1,7 +1,7 @@
 # Architecture and Tradeoffs
 
 ## Boundaries
-- `internal/adapters/*`: venue-specific payload loading (fixture, optional live inspect, and live Premier League scan).
+- `internal/adapters/*`: venue-specific payload loading (fixture, optional live inspect, live Fed scan, and live Premier League scan).
 - `internal/normalize`: venue payload -> canonical `VenueMarketInstance`.
 - `internal/cluster`: canonical event and proposition clustering + equivalence assessments.
 - `internal/router`: route simulation from normalized proposition clusters only.
@@ -54,9 +54,17 @@ Router scoring uses normalized quote/depth fields from proposition clusters and 
 The repository now has both:
 - a CLI path for deterministic checks and artifact inspection
 - a thin local web UI for reviewer/demo usability
+- a live Fed CLI/UI mode that exercises the same architecture against current public data
 - a live EPL CLI/UI mode that exercises the same architecture against current public data
 
 The web UI is intentionally not a separate product architecture. It is a thin layer over the same shared demo snapshot used by the CLI.
+
+## CLI posture
+The terminal demo is treated as a first-class operator surface, not a debug afterthought:
+- `scan` summarizes one source cleanly
+- `showcase` / `demo-cli` walks fixture, live Fed, and live EPL in one pass
+- `list-clusters` exposes routeable proposition choices
+- `route-order` can resolve by internal cluster id or by human-readable event/proposition selectors
 
 ## Known limitations
 - Canonical key derivation remains heuristic and fixture-calibrated.

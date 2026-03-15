@@ -20,7 +20,29 @@ If you want a quick list of supported commands first:
 make
 ```
 
-## 2) Optional: run the live Premier League scan
+If you want the terminal-first full showcase across every supported source:
+
+```bash
+make demo-cli
+```
+
+## 2) Optional: run the live Fed scan
+```bash
+make live-fed
+```
+
+This fetches the current plus next 4 open Fed meetings from Polymarket and Kalshi, builds live event/proposition clusters, and simulates routing across every routeable rate-decision proposition it can match.
+
+For the browser version of that same live path:
+
+```bash
+make dev-live-fed
+```
+
+Use the live Fed path to show that the same architecture can operate continuously on FOMC markets, not just sports.
+If you want fewer or more meetings, use `FED_MEETINGS=<n>`.
+
+## 3) Optional: run the live Premier League scan
 ```bash
 make live-epl
 ```
@@ -36,14 +58,26 @@ make dev-live-epl
 Use the live path when the public APIs are stable and you want to show the ongoing operating model, not just the deterministic fixture demo.
 If you want to widen or narrow the window, use `LIVE_MATCHWEEKS=<n>`.
 
-## 3) Inspect routeable clusters from the fixture CLI
+## 4) Inspect routeable clusters from the CLI
 ```bash
 make list-clusters ROUTEABLE_ONLY=1
 ```
 
 This is the explicit selection step before routing a CLI order.
 
-## 4) Use the web UI first
+For live Fed:
+
+```bash
+make list-clusters ROUTEABLE_ONLY=1 SOURCE=live-fed FED_MEETINGS=2
+```
+
+For live EPL:
+
+```bash
+make list-clusters ROUTEABLE_ONLY=1 SOURCE=live-epl LIVE_MATCHWEEKS=2
+```
+
+## 5) Use the web UI first
 - Review the routeable cluster card.
 - Use the order simulator form with the default values.
 - Confirm that the default `buy_yes` order routes to `Polymarket`.
@@ -53,14 +87,14 @@ This is the explicit selection step before routing a CLI order.
 - Confirm that the `liverpool win` proposition at limit `0.76` routes to `Polymarket`.
 - Confirm that the `tottenham win` proposition at limit `0.10` routes to `Polymarket`.
 
-## 5) Run checks from the CLI
+## 6) Run checks from the CLI
 ```bash
 make verify
 ```
 
 `make verify` runs tests plus the fixture CLI path.
 
-## 6) Route specific hypothetical orders from the fixture CLI
+## 7) Route specific hypothetical orders from the CLI
 ```bash
 make route-order CLUSTER=prop-001
 ```
@@ -72,9 +106,14 @@ make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.58 SIZE=1000
 make route-order CLUSTER=prop-007 SIDE=buy_yes LIMIT=0.15 SIZE=1000
 make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76 SIZE=1000
 make route-order CLUSTER=prop-009 SIDE=buy_yes LIMIT=0.10 SIZE=1000
+make route-order EVENT_QUERY='fomc march 2026' PROP_QUERY='fed hike rate march meeting' LIMIT=0.60 SIZE=1000
+make route-order EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=1000
 ```
 
-## 7) Inspect artifact
+The selector-based form is better for the terminal demo because it does not rely on internal `prop-00x` ids.
+For live data, prefer `make scan SOURCE=live-fed ...` or `make scan SOURCE=live-epl ...` first, then copy the selector-ready routing command printed by the scan itself.
+
+## 8) Inspect artifact
 ```bash
 LATEST=$(ls -1 artifacts | tail -n 1)
 cat artifacts/$LATEST/bundle.json
@@ -82,23 +121,25 @@ cat artifacts/$LATEST/bundle.json
 
 While presenting, call out:
 - The web UI is thin and local-only. It sits on top of the same Go engine as the CLI and does not change the architecture.
-- `make live-epl` and `make dev-live-epl` use the same normalization/clustering/routing engine as the fixture path; only the data source changes.
+- `make live-fed`, `make dev-live-fed`, `make live-epl`, and `make dev-live-epl` use the same normalization/clustering/routing engine as the fixture path; only the data source changes.
 - The live EPL path approximates matchweeks from fixture dates because the public APIs expose dates reliably but do not expose a stable official matchweek field.
+- The live Fed path fetches the current plus next few open meetings, then routes only exact bucket semantics it can justify as route-safe across venues.
 - Normalization derives routeability-relevant signals from source-style fields (outcomes, market_type, rules text, deadline parseability).
 - Event clusters include mixed routeability members.
 - Proposition clusters show explicit classifications and refusal reasons.
 - `evaluation_labels.clear_non_match_case` points to an `explicit_non_match` assessment (paired cross-venue rejection), not just a single-member cluster fallback.
 - `route-order` only works for proposition clusters marked `routeable`.
+- `route-order` can resolve by human-readable event and proposition selectors, which is the cleaner demo path in the terminal.
 - In the current fixture corpus, there are currently five routeable proposition clusters:
   - `prop-001` for the Fed hike proposition
   - `prop-004` for the Liverpool-Arsenal both-teams-to-score proposition
   - `prop-007`, `prop-008`, and `prop-009` for the Liverpool vs Tottenham match outcome propositions (`draw`, `liverpool win`, `tottenham win`)
-- In the live EPL scan, the number of routeable proposition clusters is dynamic and depends on the current overlapping upcoming slate and how many matchweek-style windows are currently open. The live command prints them explicitly each run.
+- In the live Fed and live EPL scans, the number of routeable proposition clusters is dynamic and depends on the current overlapping open slate. The live commands print them explicitly each run.
 - The router currently supports hypothetical `buy_yes` and `sell_yes` orders only.
 - `buy_yes` uses `yes_ask <= limit`; `sell_yes` uses `yes_bid >= limit`.
 - With current fixture quotes, `prop-001 buy_yes` routes to `Polymarket`, `prop-001 sell_yes LIMIT=0.58` routes to `Kalshi`, `prop-007 buy_yes LIMIT=0.15` routes to `Kalshi`, and `prop-008` / `prop-009 buy_yes` route to `Polymarket`.
 
-## 8) Optional live inspect
+## 9) Optional live inspect
 ```bash
 make live-inspect LIVE_LIMIT=3
 ```

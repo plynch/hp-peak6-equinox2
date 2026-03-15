@@ -41,6 +41,11 @@ func normalizePhrase(s string) string {
 	s = repl.Replace(s)
 	parts := strings.Fields(s)
 	stop := map[string]bool{"the": true, "will": true, "at": true, "a": true, "an": true, "if": true, "on": true, "fc": true}
+	protected := map[string]bool{
+		"leeds":   true,
+		"masters": true,
+		"spurs":   true,
+	}
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		if stop[p] {
@@ -52,7 +57,7 @@ func normalizePhrase(s string) string {
 		if p == "tie" {
 			p = "draw"
 		}
-		if strings.HasSuffix(p, "s") && len(p) > 4 {
+		if strings.HasSuffix(p, "s") && len(p) > 4 && !protected[p] && !strings.HasSuffix(p, "ss") {
 			p = strings.TrimSuffix(p, "s")
 		}
 		out = append(out, p)
@@ -63,6 +68,9 @@ func normalizePhrase(s string) string {
 func inferNormalizedTarget(question string, outcomes []string, selection string) string {
 	if sportsTarget := inferSportsTarget(question, selection); sportsTarget != "" {
 		return sportsTarget
+	}
+	if fedTarget := inferFedTarget(question, selection); fedTarget != "" {
+		return fedTarget
 	}
 	q := normalizePhrase(question)
 	if len(outcomes) > 2 {
@@ -93,6 +101,35 @@ func inferSportsTarget(question string, selection string) string {
 		canonical := canonicalSelection(subject)
 		if canonical != "" {
 			return canonical + " win"
+		}
+	}
+	return ""
+}
+
+func inferFedTarget(question string, selection string) string {
+	lower := strings.ToLower(strings.TrimSpace(question + " " + selection))
+	if !strings.Contains(lower, "fed") && !strings.Contains(lower, "federal reserve") {
+		return ""
+	}
+	if strings.Contains(lower, "no change") || strings.Contains(lower, "0bps") || strings.Contains(lower, "0 bps") {
+		return "fed no change"
+	}
+	if strings.Contains(lower, "cut") || strings.Contains(lower, "decrease") {
+		switch {
+		case strings.Contains(lower, ">25bps"), strings.Contains(lower, ">25 bps"), strings.Contains(lower, "50+"), strings.Contains(lower, "50 +"):
+			return "fed cut more than 25bps"
+		case strings.Contains(lower, "25bps"), strings.Contains(lower, "25 bps"):
+			return "fed cut exactly 25bps"
+		}
+	}
+	if strings.Contains(lower, "hike") || strings.Contains(lower, "increase") {
+		switch {
+		case strings.Contains(lower, "25+") || strings.Contains(lower, "25 +"):
+			return "fed hike at least 25bps"
+		case strings.Contains(lower, ">25bps"), strings.Contains(lower, ">25 bps"):
+			return "fed hike more than 25bps"
+		case strings.Contains(lower, "25bps"), strings.Contains(lower, "25 bps"):
+			return "fed hike exactly 25bps"
 		}
 	}
 	return ""
@@ -225,6 +262,9 @@ func FromPolymarket(rows []polymarket.RawMarket) []model.VenueMarketInstance {
 		normTarget := inferNormalizedTarget(r.Question, r.Outcomes, "")
 		deadline := parseTime(r.EndDateISO)
 		unsupported := inferUnsupported(binaryLike, hasOther, r.MarketType, r.Outcomes, r.Question+" "+r.RulesText)
+		if strings.HasPrefix(normTarget, "fed ") {
+			unsupported = false
+		}
 		amb := inferAmbiguity(r.Question, r.RulesText, deadline)
 		prop := fmt.Sprintf("%s:%s", eventKey, slug(normTarget))
 		out = append(out, model.VenueMarketInstance{
@@ -261,6 +301,9 @@ func FromKalshi(rows []kalshi.RawMarket) []model.VenueMarketInstance {
 		normTarget := inferNormalizedTarget(r.Title, r.Outcomes, r.YesSubTitle)
 		deadline := parseTime(r.CloseTimeISO)
 		unsupported := inferUnsupported(binaryLike, hasOther, r.MarketType, r.Outcomes, r.Title+" "+r.RulesText)
+		if strings.HasPrefix(normTarget, "fed ") {
+			unsupported = false
+		}
 		amb := inferAmbiguity(r.Title, r.RulesText+" "+r.SettlementNotes, deadline)
 		prop := fmt.Sprintf("%s:%s", eventKey, slug(normTarget))
 		out = append(out, model.VenueMarketInstance{

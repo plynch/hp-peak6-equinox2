@@ -11,8 +11,10 @@ This submission implements:
 - canonical proposition clustering inside events
 - venue-agnostic routing simulation
 - deterministic fixture-first demo support
+- ongoing live Fed decision scan support
 - ongoing live Premier League scan support
 - durable local persistence through a relational store boundary
+- a terminal-first operator CLI plus a thin local demo UI
 
 The current fixture corpus includes a live-style Premier League event for Liverpool vs Tottenham on Sunday, March 15, 2026 at 11:30 AM Central, modeled with three routeable cross-venue match-outcome propositions.
 
@@ -40,6 +42,12 @@ To see the supported operator commands:
 make
 ```
 
+For the terminal-first all-sources demo:
+
+```bash
+make demo-cli
+```
+
 To run verification from the CLI:
 
 ```bash
@@ -58,6 +66,12 @@ Optional live ingest check:
 make live-inspect LIVE_LIMIT=1
 ```
 
+Optional live Fed scan:
+
+```bash
+make live-fed
+```
+
 Optional live Premier League scan:
 
 ```bash
@@ -67,7 +81,7 @@ make live-epl
 To route a specific hypothetical order against the fixture state:
 
 ```bash
-make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76
+make route-order EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76
 ```
 
 ## Main Architectural Decisions
@@ -89,6 +103,10 @@ Local deployment was chosen deliberately because the project specification expli
 
 The local web UI is intentionally thin. It is a presentation layer over the same fixture-backed Go pipeline already exercised by the CLI. This makes the demo easier to operate without introducing a second application architecture.
 
+### Terminal-first operator CLI
+
+The CLI is treated as a first-class demo surface, not just a verification harness. `make demo-cli` walks fixture, live Fed, and live EPL in one pass, while `make scan` and selector-based `make route-order` make it possible to demonstrate discovery and routing from the terminal without relying on internal cluster IDs.
+
 ### SQLite fallback
 
 The PRD originally preferred PostgreSQL as the local relational store. The implemented MVP uses SQLite as an embedded relational fallback to preserve a clean relational persistence boundary while keeping the reviewer path deterministic and low-friction.
@@ -97,9 +115,9 @@ The PRD originally preferred PostgreSQL as the local relational store. The imple
 
 The primary reviewer path is fixture-backed because live cross-venue routeable overlaps are unstable and because the assignment is primarily evaluating architecture, decomposition, and ambiguity handling.
 
-### Live Premier League operator path
+### Live operator paths
 
-The repository also includes a live EPL scan path (`make live-epl` / `make dev-live-epl`) that fetches the current plus next few upcoming matchweek-style windows from both venues, clusters the overlapping matches, and simulates routing across every routeable proposition cluster it finds. This is secondary to the deterministic fixture path, but it demonstrates that the same architecture can operate continuously on current public data.
+The repository includes both a live Fed scan path (`make live-fed` / `make dev-live-fed`) and a live EPL scan path (`make live-epl` / `make dev-live-epl`). These fetch currently open public markets from both venues, cluster the overlapping events and propositions, and simulate routing across every routeable proposition cluster they find. These paths are secondary to the deterministic fixture path, but they demonstrate that the same architecture can operate continuously on current public data.
 
 ### Curated versus derived fixture behavior
 
@@ -121,6 +139,7 @@ Still curated in fixtures:
 
 - Clustering remains heuristic and fixture-calibrated.
 - Live routeability depends on current public overlap and market availability between Polymarket and Kalshi.
+- Live venue APIs can rate-limit or change their open slate during the demo window; the CLI handles this more gracefully now, but the deterministic fixture path remains the primary reviewer path.
 - The public APIs do not expose a stable official EPL matchweek field, so the live scan infers matchweek-style windows from fixture dates.
 - The prototype does not model fees, settlement economics, execution risk, or real-money trading.
 - Only simple binary yes or no propositions are treated as routeable in the MVP.

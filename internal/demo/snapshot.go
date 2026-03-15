@@ -89,6 +89,32 @@ func LoadLivePremierLeagueSnapshot(ctx context.Context, matchweekLimit int) (Sna
 	}, nil
 }
 
+func LoadLiveFedSnapshot(ctx context.Context, meetingLimit int) (Snapshot, error) {
+	pmRows, err := (polymarket.Adapter{}).LiveFedDecision(ctx, meetingLimit)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	kRows, err := (kalshi.Adapter{}).LiveFedDecision(ctx, meetingLimit)
+	if err != nil {
+		return Snapshot{}, err
+	}
+
+	instances := append(normalize.FromPolymarket(pmRows), normalize.FromKalshi(kRows)...)
+	events := cluster.BuildEventClusters(instances)
+	props, assessments := cluster.BuildPropositionClusters(events)
+	decisions := marketableDecisions(props)
+
+	return Snapshot{
+		Instances:   instances,
+		Events:      events,
+		Props:       props,
+		Assessments: assessments,
+		Decisions:   decisions,
+		Evaluation:  DeriveEvaluationLabels(events, props, assessments),
+		GeneratedAt: time.Now().UTC(),
+	}, nil
+}
+
 func fixturePath(name string) (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {

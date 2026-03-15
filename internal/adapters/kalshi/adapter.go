@@ -52,22 +52,10 @@ func (a Adapter) LoadFixture(path string) ([]RawMarket, error) {
 }
 
 func (a Adapter) LiveInspect(ctx context.Context, limit int) ([]RawMarket, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.elections.kalshi.com/trade-api/v2/markets?limit=%d&status=open", limit), nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("kalshi status %d", resp.StatusCode)
-	}
 	var payload struct {
 		Markets []map[string]any `json:"markets"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := getJSON(ctx, fmt.Sprintf("https://api.elections.kalshi.com/trade-api/v2/markets?limit=%d&status=open", limit), &payload); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -91,23 +79,10 @@ func (a Adapter) LiveInspect(ctx context.Context, limit int) ([]RawMarket, error
 }
 
 func (a Adapter) LivePremierLeague(ctx context.Context, matchweekLimit int) ([]RawMarket, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.elections.kalshi.com/trade-api/v2/events?series_ticker=KXEPLGAME&limit=200", nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("kalshi events status %d", resp.StatusCode)
-	}
-
 	var payload struct {
 		Events []liveEventSummary `json:"events"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := getJSON(ctx, "https://api.elections.kalshi.com/trade-api/v2/events?series_ticker=KXEPLGAME&limit=200", &payload); err != nil {
 		return nil, err
 	}
 
@@ -147,25 +122,56 @@ func (a Adapter) LivePremierLeague(ctx context.Context, matchweekLimit int) ([]R
 	return results, nil
 }
 
-func (a Adapter) loadPremierLeagueEvent(ctx context.Context, ticker string) ([]RawMarket, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.elections.kalshi.com/trade-api/v2/events/"+ticker, nil)
-	if err != nil {
-		return nil, err
+func (a Adapter) LiveFedDecision(ctx context.Context, meetingLimit int) ([]RawMarket, error) {
+	var payload struct {
+		Events []fedEventSummary `json:"events"`
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
+	if err := getJSON(ctx, "https://api.elections.kalshi.com/trade-api/v2/events?series_ticker=KXFEDDECISION&limit=200", &payload); err != nil {
 		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("kalshi event %s status %d", ticker, resp.StatusCode)
 	}
 
+	now := time.Now().UTC()
+	filtered := make([]fedEventSummary, 0, len(payload.Events))
+	for _, event := range payload.Events {
+		eventTime := parseTimeString(event.StrikeDate)
+		if eventTime == nil {
+			continue
+		}
+		if eventTime.Before(now.Add(-24 * time.Hour)) {
+			continue
+		}
+		filtered = append(filtered, event)
+	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		ti := parseTimeString(filtered[i].StrikeDate)
+		tj := parseTimeString(filtered[j].StrikeDate)
+		if ti == nil || tj == nil {
+			return filtered[i].EventTicker < filtered[j].EventTicker
+		}
+		return ti.Before(*tj)
+	})
+	if meetingLimit > 0 && len(filtered) > meetingLimit {
+		filtered = filtered[:meetingLimit]
+	}
+
+	results := make([]RawMarket, 0, len(filtered)*5)
+	for _, event := range filtered {
+		rows, err := a.loadFedDecisionEvent(ctx, event.EventTicker)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, rows...)
+	}
+	return results, nil
+}
+
+func (a Adapter) loadPremierLeagueEvent(ctx context.Context, ticker string) ([]RawMarket, error) {
 	var payload struct {
 		Event   liveEventDetail   `json:"event"`
 		Markets []liveMarketEntry `json:"markets"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := getJSON(ctx, "https://api.elections.kalshi.com/trade-api/v2/events/"+ticker, &payload); err != nil {
 		return nil, err
 	}
 
@@ -205,6 +211,54 @@ func (a Adapter) loadPremierLeagueEvent(ctx context.Context, ticker string) ([]R
 	return rows, nil
 }
 
+func (a Adapter) loadFedDecisionEvent(ctx context.Context, ticker string) ([]RawMarket, error) {
+	var payload struct {
+		Event   fedEventDetail    `json:"event"`
+		Markets []liveMarketEntry `json:"markets"`
+	}
+	if err := getJSON(ctx, "https://api.elections.kalshi.com/trade-api/v2/events/"+ticker, &payload); err != nil {
+		return nil, err
+	}
+
+	rows := make([]RawMarket, 0, len(payload.Markets))
+	for _, market := range payload.Markets {
+		if market.Status != "" && market.Status != "active" {
+			continue
+		}
+		rulesText := market.RulesSecondary
+		if rulesText == "" {
+			rulesText = market.EarlyCloseCondition
+		}
+		selection := market.Subtitle
+		if selection == "" {
+			selection = market.YesSubTitle
+		}
+		rows = append(rows, RawMarket{
+			EventID:         payload.Event.EventTicker,
+			EventTitle:      payload.Event.Title,
+			EventFamily:     "fed_fomc",
+			MarketTicker:    market.Ticker,
+			Title:           market.Title,
+			YesSubTitle:     selection,
+			Category:        "economy",
+			MarketType:      market.MarketType,
+			Outcomes:        []string{"Yes", "No"},
+			RulesPrimary:    market.RulesPrimary,
+			RulesText:       rulesText,
+			CloseTimeISO:    coalesceTime(payload.Event.StrikeDate, market.ExpectedExpirationTime, market.CloseTime),
+			YesBidCents:     dollarsToCents(market.YesBidDollars),
+			YesAskCents:     dollarsToCents(market.YesAskDollars),
+			NoBidCents:      dollarsToCents(market.NoBidDollars),
+			NoAskCents:      dollarsToCents(market.NoAskDollars),
+			DepthNotional:   parseFloat(market.VolumeFP),
+			QuoteObserved:   market.YesBidDollars != "" || market.YesAskDollars != "",
+			QuoteFreshAt:    coalesceTime(market.UpdatedTime, payload.Event.StrikeDate),
+			SettlementNotes: market.RulesSecondary,
+		})
+	}
+	return rows, nil
+}
+
 type liveEventSummary struct {
 	EventTicker string `json:"event_ticker"`
 }
@@ -214,9 +268,22 @@ type liveEventDetail struct {
 	Title       string `json:"title"`
 }
 
+type fedEventSummary struct {
+	EventTicker string `json:"event_ticker"`
+	StrikeDate  string `json:"strike_date"`
+	Title       string `json:"title"`
+}
+
+type fedEventDetail struct {
+	EventTicker string `json:"event_ticker"`
+	StrikeDate  string `json:"strike_date"`
+	Title       string `json:"title"`
+}
+
 type liveMarketEntry struct {
 	Ticker                 string `json:"ticker"`
 	Title                  string `json:"title"`
+	Subtitle               string `json:"subtitle"`
 	YesSubTitle            string `json:"yes_sub_title"`
 	MarketType             string `json:"market_type"`
 	Status                 string `json:"status"`
@@ -257,6 +324,51 @@ func coalesceTime(values ...string) string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
+func getJSON(ctx context.Context, url string, target any) error {
+	var lastErr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return err
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			lastErr = err
+		} else {
+			func() {
+				defer resp.Body.Close()
+				if resp.StatusCode < 300 {
+					lastErr = json.NewDecoder(resp.Body).Decode(target)
+					return
+				}
+				lastErr = fmt.Errorf("kalshi status %d", resp.StatusCode)
+				if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+					wait := retryDelay(resp.Header.Get("Retry-After"), attempt)
+					select {
+					case <-ctx.Done():
+						lastErr = ctx.Err()
+					case <-time.After(wait):
+					}
+				}
+			}()
+			if lastErr == nil {
+				return nil
+			}
+			if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode < 500 {
+				return lastErr
+			}
+		}
+	}
+	return lastErr
+}
+
+func retryDelay(retryAfter string, attempt int) time.Duration {
+	if secs, err := strconv.Atoi(strings.TrimSpace(retryAfter)); err == nil && secs > 0 {
+		return time.Duration(secs) * time.Second
+	}
+	return time.Duration(attempt) * 750 * time.Millisecond
+}
+
 func parseTickerDate(ticker string) *time.Time {
 	const prefix = "KXEPLGAME-"
 	if !strings.HasPrefix(ticker, prefix) || len(ticker) < len(prefix)+7 {
@@ -286,4 +398,15 @@ func parseTickerDate(ticker string) *time.Time {
 	}
 	utc := t.UTC()
 	return &utc
+}
+
+func parseTimeString(raw string) *time.Time {
+	if raw == "" || raw == "0001-01-01T00:00:00Z" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil
+	}
+	return &t
 }

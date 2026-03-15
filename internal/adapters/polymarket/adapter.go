@@ -37,6 +37,7 @@ type RawMarket struct {
 type Adapter struct{}
 
 var eplEventSlugPattern = regexp.MustCompile(`^epl-[a-z0-9]+-[a-z0-9]+-\d{4}-\d{2}-\d{2}$`)
+var fedDecisionSlugPattern = regexp.MustCompile(`^fed-decision-in-[a-z0-9-]+$`)
 
 func (a Adapter) LoadFixture(path string) ([]RawMarket, error) {
 	b, err := os.ReadFile(path)
@@ -172,6 +173,90 @@ func (a Adapter) LivePremierLeague(ctx context.Context, matchweekLimit int) ([]R
 	return results, nil
 }
 
+func (a Adapter) LiveFedDecision(ctx context.Context, meetingLimit int) ([]RawMarket, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://gamma-api.polymarket.com/events?closed=false&limit=1000", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("polymarket status %d", resp.StatusCode)
+	}
+
+	var events []liveEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	filtered := make([]liveEvent, 0, len(events))
+	for _, event := range events {
+		if len(event.Markets) == 0 {
+			continue
+		}
+		if !fedDecisionSlugPattern.MatchString(event.Slug) {
+			continue
+		}
+		eventTime := parseTime(event.EndDate)
+		if eventTime == nil {
+			eventTime = parseTime(event.Markets[0].EndDate)
+		}
+		if eventTime != nil && eventTime.Before(now.Add(-24*time.Hour)) {
+			continue
+		}
+		filtered = append(filtered, event)
+	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		ti := parseTime(filtered[i].EndDate)
+		tj := parseTime(filtered[j].EndDate)
+		if ti == nil || tj == nil {
+			return filtered[i].Slug < filtered[j].Slug
+		}
+		return ti.Before(*tj)
+	})
+	if meetingLimit > 0 && len(filtered) > meetingLimit {
+		filtered = filtered[:meetingLimit]
+	}
+
+	results := make([]RawMarket, 0, len(filtered)*4)
+	for _, event := range filtered {
+		for _, market := range event.Markets {
+			outcomes := parseOutcomeString(market.Outcomes)
+			if len(outcomes) == 0 {
+				outcomes = []string{"Yes", "No"}
+			}
+			bestBid := valueOrZero(market.BestBid)
+			bestAsk := valueOrZero(market.BestAsk)
+			results = append(results, RawMarket{
+				EventID:       event.Slug,
+				EventTitle:    event.Title,
+				EventFamily:   "fed_fomc",
+				MarketID:      market.SlugOrID(),
+				Question:      market.Question,
+				Category:      "economy",
+				MarketType:    "binary",
+				Outcomes:      outcomes,
+				RulesPrimary:  coalesceString(market.ResolutionSource, event.ResolutionSource),
+				RulesText:     coalesceString(market.Description, event.Description),
+				EndDateISO:    coalesceString(market.EndDate, event.EndDate),
+				QuoteYesBid:   bestBid,
+				QuoteYesAsk:   bestAsk,
+				QuoteNoBid:    complement(bestAsk),
+				QuoteNoAsk:    complement(bestBid),
+				DepthNotional: valueOrZero(market.LiquidityNum),
+				QuoteObserved: market.BestBid != nil || market.BestAsk != nil,
+				QuoteFreshAt:  coalesceString(market.UpdatedAt, time.Now().UTC().Format(time.RFC3339)),
+			})
+		}
+	}
+	return results, nil
+}
+
 func parseTime(raw string) *time.Time {
 	if raw == "" {
 		return nil
@@ -184,9 +269,12 @@ func parseTime(raw string) *time.Time {
 }
 
 type liveEvent struct {
-	Slug    string       `json:"slug"`
-	Title   string       `json:"title"`
-	Markets []liveMarket `json:"markets"`
+	Slug             string       `json:"slug"`
+	Title            string       `json:"title"`
+	EndDate          string       `json:"endDate"`
+	Description      string       `json:"description"`
+	ResolutionSource string       `json:"resolutionSource"`
+	Markets          []liveMarket `json:"markets"`
 }
 
 type liveMarket struct {
