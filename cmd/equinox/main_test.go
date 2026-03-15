@@ -1,7 +1,9 @@
 package main
 
 import (
+	"reflect"
 	"testing"
+	"time"
 
 	"equinox/internal/demo"
 	"equinox/internal/model"
@@ -50,5 +52,62 @@ func TestResolveClusterIDRejectsAmbiguousSelectors(t *testing.T) {
 
 	if _, err := resolveClusterID(snapshot, "live-epl", "", "liverpool vs tottenham", "win"); err == nil {
 		t.Fatalf("expected ambiguous selector to fail")
+	}
+}
+
+func TestCollectRouteableEventRowsAggregatesPropositionsByEvent(t *testing.T) {
+	march := time.Date(2026, 3, 15, 16, 30, 0, 0, time.UTC)
+	snapshot := demo.Snapshot{
+		Events: []model.EventCluster{
+			{ClusterID: "event-001", Title: "liverpool vs tottenham"},
+			{ClusterID: "event-002", Title: "fed decision in march?"},
+		},
+		Props: []model.PropositionCluster{
+			{
+				ClusterID:      "prop-001",
+				EventClusterID: "event-001",
+				Proposition:    "liverpool win",
+				Routeability:   model.Routeable,
+				MarketInstances: []model.VenueMarketInstance{
+					{Venue: model.VenueKalshi, DeadlineUTC: &march},
+					{Venue: model.VenuePolymarket, DeadlineUTC: &march},
+				},
+			},
+			{
+				ClusterID:      "prop-002",
+				EventClusterID: "event-001",
+				Proposition:    "draw",
+				Routeability:   model.Routeable,
+				MarketInstances: []model.VenueMarketInstance{
+					{Venue: model.VenueKalshi, DeadlineUTC: &march},
+					{Venue: model.VenuePolymarket, DeadlineUTC: &march},
+				},
+			},
+			{
+				ClusterID:      "prop-003",
+				EventClusterID: "event-002",
+				Proposition:    "fed no change",
+				Routeability:   model.Routeable,
+				MarketInstances: []model.VenueMarketInstance{
+					{Venue: model.VenueKalshi},
+					{Venue: model.VenuePolymarket},
+				},
+			},
+		},
+	}
+
+	rows := collectRouteableEventRows(snapshot)
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(rows))
+	}
+	if rows[0].Title != "liverpool vs tottenham" {
+		t.Fatalf("expected liverpool event first, got %q", rows[0].Title)
+	}
+	if rows[0].RouteableCount != 2 {
+		t.Fatalf("expected 2 routeable props, got %d", rows[0].RouteableCount)
+	}
+	expected := []string{"draw", "liverpool win"}
+	if !reflect.DeepEqual(rows[0].Propositions, expected) {
+		t.Fatalf("expected propositions %v, got %v", expected, rows[0].Propositions)
 	}
 }

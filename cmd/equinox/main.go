@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -69,7 +70,7 @@ func main() {
 func runServe() error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:8080", "server bind address")
-	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, or live-fed")
+	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, live-fed, or all-live")
 	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
 	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
 	_ = fs.Parse(os.Args[2:])
@@ -103,7 +104,7 @@ func runServe() error {
 
 func runScan() error {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
-	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, or live-fed")
+	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, live-fed, or all-live")
 	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
 	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
 	_ = fs.Parse(os.Args[2:])
@@ -178,7 +179,7 @@ func runFixtureDemo() error {
 
 func runRouteOrder() error {
 	fs := flag.NewFlagSet("route-order", flag.ExitOnError)
-	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, or live-fed")
+	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, live-fed, or all-live")
 	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
 	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
 	clusterID := fs.String("cluster", "", "proposition cluster id to route against (for example prop-001)")
@@ -216,7 +217,7 @@ func runRouteOrder() error {
 
 func runListClusters() error {
 	fs := flag.NewFlagSet("list-clusters", flag.ExitOnError)
-	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, or live-fed")
+	source := fs.String("source", "fixture", "snapshot source: fixture, live-epl, live-fed, or all-live")
 	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
 	meetings := fs.Int("meetings", 4, "number of current/upcoming Fed meetings to fetch when source=live-fed")
 	routeableOnly := fs.Bool("routeable-only", false, "show only routeable proposition clusters")
@@ -407,6 +408,10 @@ func loadSnapshotForSource(source string, matchweeks int, meetings int) (demo.Sn
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return demo.LoadLiveFedSnapshot(ctx, meetings)
+	case "all-live":
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		return demo.LoadAllLiveSnapshot(ctx, matchweeks, meetings)
 	default:
 		return demo.Snapshot{}, fmt.Errorf("unknown source %q", source)
 	}
@@ -421,12 +426,16 @@ func printScanSummary(source string, snapshot demo.Snapshot, matchweeks int, mee
 		fmt.Printf("window: current + next %d matchweek-style windows\n", matchweeks)
 	case "live-fed":
 		fmt.Printf("window: current + next %d Fed meetings\n", meetings)
+	case "all-live":
+		fmt.Printf("window: current + next %d Fed meetings and current + next %d EPL matchweek-style windows\n", meetings, matchweeks)
 	}
 
 	eventTitles := map[string]string{}
 	for _, event := range snapshot.Events {
 		eventTitles[event.ClusterID] = event.Title
 	}
+
+	printRouteableEventsSummary(snapshot)
 
 	fmt.Println("\nrouteable proposition clusters:")
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -472,6 +481,10 @@ func printScanSummary(source string, snapshot demo.Snapshot, matchweeks int, mee
 	case "live-fed":
 		fmt.Printf("  make list-clusters ROUTEABLE_ONLY=1 SOURCE=live-fed FED_MEETINGS=%d\n", meetings)
 		printSuggestedRouteCommands(snapshot, source, matchweeks, meetings)
+	case "all-live":
+		fmt.Printf("  make scan SOURCE=live-fed FED_MEETINGS=%d\n", meetings)
+		fmt.Printf("  make scan SOURCE=live-epl LIVE_MATCHWEEKS=%d\n", matchweeks)
+		printSuggestedRouteCommands(snapshot, source, matchweeks, meetings)
 	}
 	return nil
 }
@@ -484,6 +497,8 @@ func sourceHeading(source string) string {
 		return "LIVE PREMIER LEAGUE"
 	case "live-fed":
 		return "LIVE FED DECISIONS"
+	case "all-live":
+		return "ALL LIVE ROUTEABLE MARKETS"
 	default:
 		return strings.ToUpper(source)
 	}
@@ -509,6 +524,110 @@ func countRouteable(props []model.PropositionCluster) int {
 		}
 	}
 	return count
+}
+
+type routeableEventRow struct {
+	Title            string
+	RouteableCount   int
+	Propositions     []string
+	Venues           string
+	EarliestDeadline time.Time
+	HasDeadline      bool
+}
+
+func printRouteableEventsSummary(snapshot demo.Snapshot) {
+	rows := collectRouteableEventRows(snapshot)
+	fmt.Println("\nrouteable events:")
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "EVENT\tROUTEABLE_PROPS\tPROPOSITIONS\tVENUES")
+	for _, row := range rows {
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n", row.Title, row.RouteableCount, strings.Join(row.Propositions, ", "), row.Venues)
+	}
+	_ = tw.Flush()
+	if len(rows) == 0 {
+		fmt.Println("(none)")
+	}
+}
+
+func collectRouteableEventRows(snapshot demo.Snapshot) []routeableEventRow {
+	eventIndex := map[string]model.EventCluster{}
+	for _, event := range snapshot.Events {
+		eventIndex[event.ClusterID] = event
+	}
+
+	type accumulator struct {
+		title          string
+		propositions   []string
+		venues         map[string]bool
+		earliest       time.Time
+		hasEarliest    bool
+		routeableCount int
+	}
+	acc := map[string]*accumulator{}
+
+	for _, prop := range snapshot.Props {
+		if prop.Routeability != model.Routeable {
+			continue
+		}
+		event := eventIndex[prop.EventClusterID]
+		row := acc[prop.EventClusterID]
+		if row == nil {
+			row = &accumulator{title: event.Title, venues: map[string]bool{}}
+			acc[prop.EventClusterID] = row
+		}
+		row.routeableCount++
+		row.propositions = append(row.propositions, prop.Proposition)
+		for _, inst := range prop.MarketInstances {
+			row.venues[string(inst.Venue)] = true
+			if inst.DeadlineUTC != nil && (!row.hasEarliest || inst.DeadlineUTC.Before(row.earliest)) {
+				row.earliest = *inst.DeadlineUTC
+				row.hasEarliest = true
+			}
+		}
+	}
+
+	rows := make([]routeableEventRow, 0, len(acc))
+	for _, row := range acc {
+		props := dedupeStrings(row.propositions)
+		sort.Strings(props)
+		venues := make([]string, 0, len(row.venues))
+		for venue := range row.venues {
+			venues = append(venues, venue)
+		}
+		sort.Strings(venues)
+		rows = append(rows, routeableEventRow{
+			Title:            row.title,
+			RouteableCount:   row.routeableCount,
+			Propositions:     props,
+			Venues:           strings.Join(venues, ","),
+			EarliestDeadline: row.earliest,
+			HasDeadline:      row.hasEarliest,
+		})
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].HasDeadline != rows[j].HasDeadline {
+			return rows[i].HasDeadline
+		}
+		if rows[i].HasDeadline && !rows[i].EarliestDeadline.Equal(rows[j].EarliestDeadline) {
+			return rows[i].EarliestDeadline.Before(rows[j].EarliestDeadline)
+		}
+		return rows[i].Title < rows[j].Title
+	})
+	return rows
+}
+
+func dedupeStrings(in []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, item := range in {
+		if seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	return out
 }
 
 func resolveClusterID(snapshot demo.Snapshot, source, clusterID, eventQuery, propQuery string) (string, error) {

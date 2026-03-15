@@ -48,19 +48,7 @@ func LoadFixtureSnapshot() (Snapshot, error) {
 	}
 
 	instances := append(normalize.FromPolymarket(pmRows), normalize.FromKalshi(kRows)...)
-	events := cluster.BuildEventClusters(instances)
-	props, assessments := cluster.BuildPropositionClusters(events)
-	decisions := defaultDecisions(props)
-
-	return Snapshot{
-		Instances:   instances,
-		Events:      events,
-		Props:       props,
-		Assessments: assessments,
-		Decisions:   decisions,
-		Evaluation:  DeriveEvaluationLabels(events, props, assessments),
-		GeneratedAt: time.Now().UTC(),
-	}, nil
+	return buildSnapshot(instances, defaultDecisions), nil
 }
 
 func LoadLivePremierLeagueSnapshot(ctx context.Context, matchweekLimit int) (Snapshot, error) {
@@ -74,19 +62,7 @@ func LoadLivePremierLeagueSnapshot(ctx context.Context, matchweekLimit int) (Sna
 	}
 
 	instances := append(normalize.FromPolymarket(pmRows), normalize.FromKalshi(kRows)...)
-	events := cluster.BuildEventClusters(instances)
-	props, assessments := cluster.BuildPropositionClusters(events)
-	decisions := marketableDecisions(props)
-
-	return Snapshot{
-		Instances:   instances,
-		Events:      events,
-		Props:       props,
-		Assessments: assessments,
-		Decisions:   decisions,
-		Evaluation:  DeriveEvaluationLabels(events, props, assessments),
-		GeneratedAt: time.Now().UTC(),
-	}, nil
+	return buildSnapshot(instances, marketableDecisions), nil
 }
 
 func LoadLiveFedSnapshot(ctx context.Context, meetingLimit int) (Snapshot, error) {
@@ -100,9 +76,28 @@ func LoadLiveFedSnapshot(ctx context.Context, meetingLimit int) (Snapshot, error
 	}
 
 	instances := append(normalize.FromPolymarket(pmRows), normalize.FromKalshi(kRows)...)
+	return buildSnapshot(instances, marketableDecisions), nil
+}
+
+func LoadAllLiveSnapshot(ctx context.Context, matchweekLimit int, meetingLimit int) (Snapshot, error) {
+	fed, err := LoadLiveFedSnapshot(ctx, meetingLimit)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	epl, err := LoadLivePremierLeagueSnapshot(ctx, matchweekLimit)
+	if err != nil {
+		return Snapshot{}, err
+	}
+
+	instances := append([]model.VenueMarketInstance{}, fed.Instances...)
+	instances = append(instances, epl.Instances...)
+	return buildSnapshot(instances, marketableDecisions), nil
+}
+
+func buildSnapshot(instances []model.VenueMarketInstance, decide func([]model.PropositionCluster) []model.RoutingDecision) Snapshot {
 	events := cluster.BuildEventClusters(instances)
 	props, assessments := cluster.BuildPropositionClusters(events)
-	decisions := marketableDecisions(props)
+	decisions := decide(props)
 
 	return Snapshot{
 		Instances:   instances,
@@ -112,7 +107,7 @@ func LoadLiveFedSnapshot(ctx context.Context, meetingLimit int) (Snapshot, error
 		Decisions:   decisions,
 		Evaluation:  DeriveEvaluationLabels(events, props, assessments),
 		GeneratedAt: time.Now().UTC(),
-	}, nil
+	}
 }
 
 func fixturePath(name string) (string, error) {

@@ -86,7 +86,9 @@ Outputs:
 - `make`
   - Prints the supported demo and operator targets.
 - `make scan SOURCE=live-fed`
-  - Runs the source-aware terminal scan for a single source (`fixture`, `live-fed`, or `live-epl`).
+  - Runs the source-aware terminal scan for a single source (`fixture`, `live-fed`, `live-epl`, or `all-live`).
+- `make scan SOURCE=all-live FED_MEETINGS=2 LIVE_MATCHWEEKS=1`
+  - Prints every currently routeable live event across the supported Fed and EPL domains, then shows the underlying proposition clusters and selector-ready route commands.
 - `make showcase`
   - Alias-equivalent to the terminal demo flow used by `make demo-cli`.
 - `make live-fed`
@@ -126,7 +128,7 @@ Outputs:
   - `prop-009`: `tottenham win` for `Liverpool vs Tottenham`
 - In the live EPL scan, routeable clusters are discovered dynamically from the current upcoming slate and can include many matched match-outcome propositions across both venues.
 - In the live Fed scan, routeable clusters are discovered dynamically from the current plus next few open meetings and currently include exact overlaps like `fed no change`, `fed cut exactly 25bps`, and `fed cut more than 25bps`.
-- Because live identifiers and prices move, the preferred live operator flow is `make scan SOURCE=live-fed ...` or `make scan SOURCE=live-epl ...` and then copy the selector-ready `make route-order ...` command it prints.
+- Because live identifiers and prices move, the preferred live operator flow is `make scan SOURCE=live-fed ...`, `make scan SOURCE=live-epl ...`, or `make scan SOURCE=all-live ...`, then copy the selector-ready `make route-order ...` command it prints.
 - If the public APIs expose fewer than 4 upcoming matchweek-style windows, the live scan returns whatever overlap is currently available.
 - The router refuses:
   - unsupported clusters
