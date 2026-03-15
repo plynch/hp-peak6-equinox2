@@ -107,8 +107,34 @@ func canonicalSelection(selection string) string {
 		return "draw"
 	}
 	repl := strings.NewReplacer(
+		"arsenal fc", "arsenal",
+		"aston villa fc", "aston villa",
+		"bournemouth fc", "bournemouth",
+		"brentford fc", "brentford",
+		"brighton hove albion", "brighton",
+		"chelsea fc", "chelsea",
+		"crystal palace fc", "crystal palace",
+		"everton fc", "everton",
+		"fulham fc", "fulham",
+		"ipswich town", "ipswich",
+		"leeds united", "leeds united",
 		"tottenham hotspur", "tottenham",
+		"tottenham hotspur fc", "tottenham",
+		"spurs", "tottenham",
+		"manchester city fc", "manchester city",
+		"manchester united fc", "manchester united",
 		"liverpool football club", "liverpool",
+		"liverpool fc", "liverpool",
+		"newcastle united", "newcastle",
+		"newcastle united fc", "newcastle",
+		"nottingham forest", "nottingham forest",
+		"nottingham forest fc", "nottingham forest",
+		"nottingham", "nottingham forest",
+		"west ham united", "west ham",
+		"west ham united fc", "west ham",
+		"wolverhampton wanderers", "wolverhampton",
+		"wolverhampton wanderers fc", "wolverhampton",
+		"wolves", "wolverhampton",
 	)
 	s = repl.Replace(s)
 	return strings.TrimSpace(s)
@@ -135,7 +161,7 @@ func inferUnsupported(binaryLike bool, hasOther bool, marketType string, outcome
 		return true
 	}
 	lower := strings.ToLower(text)
-	return strings.Contains(lower, "other") || strings.Contains(lower, "bucket") || strings.Contains(lower, "multi-outcome")
+	return containsWord(lower, "other") || containsWord(lower, "bucket") || strings.Contains(lower, "multi-outcome")
 }
 
 func inferBinaryLike(outcomes []string, marketType string) (bool, bool) {
@@ -273,4 +299,15 @@ func dedupe(in []string) []string {
 		}
 	}
 	return out
+}
+
+func containsWord(text, word string) bool {
+	repl := strings.NewReplacer("/", " ", "-", " ", "_", " ", ":", " ", ",", " ", ".", " ", "?", " ", "!", " ", "\"", " ", "'", " ", "(", " ", ")", " ")
+	parts := strings.Fields(repl.Replace(strings.ToLower(text)))
+	for _, part := range parts {
+		if part == word {
+			return true
+		}
+	}
+	return false
 }

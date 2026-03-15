@@ -1,6 +1,6 @@
 # Demo Script
 
-## 1) Start the local demo
+## 1) Start the deterministic local demo
 ```bash
 make dev
 ```
@@ -20,14 +20,29 @@ If you want a quick list of supported commands first:
 make
 ```
 
-## 2) Inspect routeable clusters from the CLI
+## 2) Optional: run the live Premier League scan
+```bash
+make live-epl
+```
+
+This fetches the current upcoming Premier League slate from Polymarket and Kalshi, builds live event/proposition clusters, and simulates routing across every routeable proposition cluster it finds.
+
+For the browser version of that same live path:
+
+```bash
+make dev-live-epl
+```
+
+Use the live path when the public APIs are stable and you want to show the ongoing operating model, not just the deterministic fixture demo.
+
+## 3) Inspect routeable clusters from the fixture CLI
 ```bash
 make list-clusters ROUTEABLE_ONLY=1
 ```
 
 This is the explicit selection step before routing a CLI order.
 
-## 3) Use the web UI first
+## 4) Use the web UI first
 - Review the routeable cluster card.
 - Use the order simulator form with the default values.
 - Confirm that the default `buy_yes` order routes to `Polymarket`.
@@ -37,14 +52,14 @@ This is the explicit selection step before routing a CLI order.
 - Confirm that the `liverpool win` proposition at limit `0.76` routes to `Polymarket`.
 - Confirm that the `tottenham win` proposition at limit `0.10` routes to `Polymarket`.
 
-## 4) Run checks from the CLI
+## 5) Run checks from the CLI
 ```bash
 make verify
 ```
 
 `make verify` runs tests plus the fixture CLI path.
 
-## 5) Route specific hypothetical orders from the CLI
+## 6) Route specific hypothetical orders from the fixture CLI
 ```bash
 make route-order CLUSTER=prop-001
 ```
@@ -58,7 +73,7 @@ make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76 SIZE=1000
 make route-order CLUSTER=prop-009 SIDE=buy_yes LIMIT=0.10 SIZE=1000
 ```
 
-## 6) Inspect artifact
+## 7) Inspect artifact
 ```bash
 LATEST=$(ls -1 artifacts | tail -n 1)
 cat artifacts/$LATEST/bundle.json
@@ -66,6 +81,7 @@ cat artifacts/$LATEST/bundle.json
 
 While presenting, call out:
 - The web UI is thin and local-only. It sits on top of the same Go engine as the CLI and does not change the architecture.
+- `make live-epl` and `make dev-live-epl` use the same normalization/clustering/routing engine as the fixture path; only the data source changes.
 - Normalization derives routeability-relevant signals from source-style fields (outcomes, market_type, rules text, deadline parseability).
 - Event clusters include mixed routeability members.
 - Proposition clusters show explicit classifications and refusal reasons.
@@ -75,11 +91,12 @@ While presenting, call out:
   - `prop-001` for the Fed hike proposition
   - `prop-004` for the Liverpool-Arsenal both-teams-to-score proposition
   - `prop-007`, `prop-008`, and `prop-009` for the Liverpool vs Tottenham match outcome propositions (`draw`, `liverpool win`, `tottenham win`)
+- In the live EPL scan, the number of routeable proposition clusters is dynamic and depends on the current overlapping upcoming slate. The live command prints them explicitly each run.
 - The router currently supports hypothetical `buy_yes` and `sell_yes` orders only.
 - `buy_yes` uses `yes_ask <= limit`; `sell_yes` uses `yes_bid >= limit`.
 - With current fixture quotes, `prop-001 buy_yes` routes to `Polymarket`, `prop-001 sell_yes LIMIT=0.58` routes to `Kalshi`, `prop-007 buy_yes LIMIT=0.15` routes to `Kalshi`, and `prop-008` / `prop-009 buy_yes` route to `Polymarket`.
 
-## 7) Optional live inspect
+## 8) Optional live inspect
 ```bash
 make live-inspect LIVE_LIMIT=3
 ```

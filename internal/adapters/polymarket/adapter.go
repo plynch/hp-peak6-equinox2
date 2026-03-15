@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
+	"sort"
 	"time"
 )
 
@@ -31,6 +33,8 @@ type RawMarket struct {
 }
 
 type Adapter struct{}
+
+var eplEventSlugPattern = regexp.MustCompile(`^epl-[a-z0-9]+-[a-z0-9]+-\d{4}-\d{2}-\d{2}$`)
 
 func (a Adapter) LoadFixture(path string) ([]RawMarket, error) {
 	b, err := os.ReadFile(path)
@@ -80,4 +84,155 @@ func (a Adapter) LiveInspect(ctx context.Context, limit int) ([]RawMarket, error
 		})
 	}
 	return results, nil
+}
+
+func (a Adapter) LivePremierLeague(ctx context.Context, eventLimit int) ([]RawMarket, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://gamma-api.polymarket.com/events?tag_slug=premier-league&closed=false&limit=200", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("polymarket status %d", resp.StatusCode)
+	}
+
+	var events []liveEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	filtered := make([]liveEvent, 0, len(events))
+	for _, event := range events {
+		if len(event.Markets) == 0 {
+			continue
+		}
+		if !eplEventSlugPattern.MatchString(event.Slug) {
+			continue
+		}
+		eventTime := parseTime(event.Markets[0].EndDate)
+		if eventTime != nil && eventTime.Before(now.Add(-2*time.Hour)) {
+			continue
+		}
+		filtered = append(filtered, event)
+	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		ti := parseTime(filtered[i].Markets[0].EndDate)
+		tj := parseTime(filtered[j].Markets[0].EndDate)
+		if ti == nil || tj == nil {
+			return filtered[i].Slug < filtered[j].Slug
+		}
+		return ti.Before(*tj)
+	})
+	if eventLimit > 0 && len(filtered) > eventLimit {
+		filtered = filtered[:eventLimit]
+	}
+
+	results := make([]RawMarket, 0, len(filtered)*3)
+	for _, event := range filtered {
+		for _, market := range event.Markets {
+			outcomes := parseOutcomeString(market.Outcomes)
+			if len(outcomes) == 0 {
+				outcomes = []string{"Yes", "No"}
+			}
+			bestBid := valueOrZero(market.BestBid)
+			bestAsk := valueOrZero(market.BestAsk)
+			results = append(results, RawMarket{
+				EventID:       event.Slug,
+				EventTitle:    event.Title,
+				EventFamily:   "soccer_big_five",
+				MarketID:      market.SlugOrID(),
+				Question:      market.Question,
+				Category:      "sports",
+				MarketType:    "binary",
+				Outcomes:      outcomes,
+				RulesPrimary:  market.ResolutionSource,
+				RulesText:     market.Description,
+				EndDateISO:    market.EndDate,
+				QuoteYesBid:   bestBid,
+				QuoteYesAsk:   bestAsk,
+				QuoteNoBid:    complement(bestAsk),
+				QuoteNoAsk:    complement(bestBid),
+				DepthNotional: valueOrZero(market.LiquidityNum),
+				QuoteObserved: market.BestBid != nil || market.BestAsk != nil,
+				QuoteFreshAt:  coalesceString(market.UpdatedAt, time.Now().UTC().Format(time.RFC3339)),
+			})
+		}
+	}
+	return results, nil
+}
+
+func parseTime(raw string) *time.Time {
+	if raw == "" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+type liveEvent struct {
+	Slug    string       `json:"slug"`
+	Title   string       `json:"title"`
+	Markets []liveMarket `json:"markets"`
+}
+
+type liveMarket struct {
+	ID               any      `json:"id"`
+	Slug             string   `json:"slug"`
+	Question         string   `json:"question"`
+	Description      string   `json:"description"`
+	ResolutionSource string   `json:"resolutionSource"`
+	EndDate          string   `json:"endDate"`
+	UpdatedAt        string   `json:"updatedAt"`
+	Outcomes         string   `json:"outcomes"`
+	BestBid          *float64 `json:"bestBid"`
+	BestAsk          *float64 `json:"bestAsk"`
+	LiquidityNum     *float64 `json:"liquidityNum"`
+}
+
+func (m liveMarket) SlugOrID() string {
+	if m.Slug != "" {
+		return m.Slug
+	}
+	return fmt.Sprint(m.ID)
+}
+
+func parseOutcomeString(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func valueOrZero(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func complement(v float64) float64 {
+	if v <= 0 {
+		return 0
+	}
+	return 1 - v
+}
+
+func coalesceString(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
 }

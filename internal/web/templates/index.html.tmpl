@@ -178,10 +178,14 @@
         <div class="eyebrow">Equinox MVP Demo</div>
         <h1>Cross-venue event clustering with route-safe proposition routing.</h1>
         <p>
-          This local UI is fixture-backed and built on the same Go engine as the CLI. It shows what the prototype currently knows how to cluster,
+          {{.SourceDescription}} It shows what the prototype currently knows how to cluster,
           which proposition clusters are routeable, and how a hypothetical order is routed without venue-specific logic in the router.
         </p>
         <div class="stats">
+          <div class="stat">
+            <strong>{{.SourceLabel}}</strong>
+            Data source
+          </div>
           <div class="stat">
             <strong>{{len .Snapshot.Events}}</strong>
             Event clusters
@@ -207,13 +211,15 @@
           <h2>How to operate this demo</h2>
           <div class="operator-list">
             <div><span class="pill">make dev</span> starts this local UI at <span class="mono">http://127.0.0.1:8080</span>.</div>
+            <div><span class="pill">make dev-live-epl</span> starts the same UI backed by a live Premier League scan.</div>
             <div><span class="pill">make verify</span> runs tests plus the fixture CLI flow.</div>
+            <div><span class="pill">make live-epl</span> fetches the upcoming EPL slate and batch-routes every routeable proposition cluster.</div>
             <div><span class="pill">make list-clusters ROUTEABLE_ONLY=1</span> shows the currently routeable proposition clusters in the CLI.</div>
             <div><span class="pill">make route-order CLUSTER=prop-001</span> is the CLI version of the order simulator.</div>
             <div><span class="pill">make live-inspect LIVE_LIMIT=1</span> checks current public API ingest viability.</div>
           </div>
           <p style="margin-top: 0.9rem;">
-            Current fixture-backed routeable clusters:
+            Current {{.SourceLabel}} routeable clusters:
             <span class="mono">{{.RouteableCount}}</span>
           </p>
           <p style="margin-top: 0.65rem;">

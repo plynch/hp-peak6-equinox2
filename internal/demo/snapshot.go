@@ -63,6 +63,32 @@ func LoadFixtureSnapshot() (Snapshot, error) {
 	}, nil
 }
 
+func LoadLivePremierLeagueSnapshot(ctx context.Context, eventLimit int) (Snapshot, error) {
+	pmRows, err := (polymarket.Adapter{}).LivePremierLeague(ctx, eventLimit)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	kRows, err := (kalshi.Adapter{}).LivePremierLeague(ctx, eventLimit)
+	if err != nil {
+		return Snapshot{}, err
+	}
+
+	instances := append(normalize.FromPolymarket(pmRows), normalize.FromKalshi(kRows)...)
+	events := cluster.BuildEventClusters(instances)
+	props, assessments := cluster.BuildPropositionClusters(events)
+	decisions := marketableDecisions(props)
+
+	return Snapshot{
+		Instances:   instances,
+		Events:      events,
+		Props:       props,
+		Assessments: assessments,
+		Decisions:   decisions,
+		Evaluation:  DeriveEvaluationLabels(events, props, assessments),
+		GeneratedAt: time.Now().UTC(),
+	}, nil
+}
+
 func fixturePath(name string) (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -187,4 +213,64 @@ func defaultDecisions(props []model.PropositionCluster) []model.RoutingDecision 
 		decisions = append(decisions, router.Simulate(o, props))
 	}
 	return decisions
+}
+
+func marketableDecisions(props []model.PropositionCluster) []model.RoutingDecision {
+	decisions := make([]model.RoutingDecision, 0, len(props)*2)
+	for _, p := range props {
+		if p.Routeability != model.Routeable {
+			continue
+		}
+		if buyLimit, ok := bestBuyLimit(p); ok {
+			order := model.HypotheticalOrder{
+				OrderID:              p.ClusterID + "-buy_yes",
+				PropositionClusterID: p.ClusterID,
+				Side:                 "buy_yes",
+				LimitProbability:     buyLimit,
+				SizeNotional:         1000,
+			}
+			decisions = append(decisions, router.Simulate(order, props))
+		}
+		if sellLimit, ok := bestSellLimit(p); ok {
+			order := model.HypotheticalOrder{
+				OrderID:              p.ClusterID + "-sell_yes",
+				PropositionClusterID: p.ClusterID,
+				Side:                 "sell_yes",
+				LimitProbability:     sellLimit,
+				SizeNotional:         1000,
+			}
+			decisions = append(decisions, router.Simulate(order, props))
+		}
+	}
+	return decisions
+}
+
+func bestBuyLimit(prop model.PropositionCluster) (float64, bool) {
+	best := 0.0
+	found := false
+	for _, instance := range prop.MarketInstances {
+		if instance.Quote.YesAsk <= 0 {
+			continue
+		}
+		if !found || instance.Quote.YesAsk < best {
+			best = instance.Quote.YesAsk
+			found = true
+		}
+	}
+	return best, found
+}
+
+func bestSellLimit(prop model.PropositionCluster) (float64, bool) {
+	best := 0.0
+	found := false
+	for _, instance := range prop.MarketInstances {
+		if instance.Quote.YesBid <= 0 {
+			continue
+		}
+		if !found || instance.Quote.YesBid > best {
+			best = instance.Quote.YesBid
+			found = true
+		}
+	}
+	return best, found
 }

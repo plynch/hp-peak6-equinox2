@@ -13,9 +13,11 @@ Additional docs:
 
 ## What this MVP demonstrates
 - Fixture-backed ingestion of metadata and quote/order-book-like fields.
+- Ongoing live Premier League ingestion from Polymarket and Kalshi public APIs.
 - Canonical event clusters from cross-venue heuristic similarity (event family, token overlap, category, deadline proximity).
 - Canonical proposition clusters inside each event from proposition-text similarity + deadline checks.
 - A live-style Premier League event cluster for Liverpool vs Tottenham on Sunday, March 15, 2026 at 11:30 AM Central, with three routeable cross-venue propositions (`liverpool win`, `draw`, `tottenham win`).
+- A live EPL batch scan that fetches the current upcoming slate and simulates routing across every routeable match-outcome proposition it can match.
 - Explicit routeability classifications (routeable, event-only, unsupported, ambiguous).
 - Venue-agnostic routing simulation over normalized inputs with limit-price feasibility enforcement.
 - Inspectable artifacts and durable relational persistence (SQLite fallback relational store).
@@ -42,6 +44,12 @@ make dev
 
 Then open [http://127.0.0.1:8080](http://127.0.0.1:8080).
 
+For the live Premier League browser demo:
+
+```bash
+make dev-live-epl
+```
+
 To see the available operator commands:
 
 ```bash
@@ -55,10 +63,14 @@ Outputs:
 ## Commands
 - `make dev`
   - Starts the local web UI demo on `http://127.0.0.1:8080`.
+- `make dev-live-epl`
+  - Starts the same web UI backed by a live Premier League snapshot from the public Polymarket and Kalshi APIs.
 - `make verify`
   - Runs `go test ./...` plus the deterministic fixture CLI flow.
 - `make`
   - Prints the supported demo and operator targets.
+- `make live-epl`
+  - Fetches the current upcoming Premier League slate from both venues, builds live event/proposition clusters, and simulates routing across every routeable proposition cluster it finds.
 - `make list-clusters ROUTEABLE_ONLY=1`
   - Lists the currently routeable proposition clusters so you can choose an explicit target for routing.
 - `go run ./cmd/equinox fixture-demo`
@@ -86,6 +98,7 @@ Outputs:
   - `prop-007`: `draw` for `Liverpool vs Tottenham`
   - `prop-008`: `liverpool win` for `Liverpool vs Tottenham`
   - `prop-009`: `tottenham win` for `Liverpool vs Tottenham`
+- In the live EPL scan, routeable clusters are discovered dynamically from the current upcoming slate and can include many matched match-outcome propositions across both venues.
 - The router refuses:
   - unsupported clusters
   - ambiguous clusters
@@ -94,10 +107,12 @@ Outputs:
 
 ## How Routing Works
 - `make dev` loads fixture state, normalizes venue records, builds event clusters, then proposition clusters, writes the local artifact and SQLite state, and starts the web UI.
+- `make dev-live-epl` runs that same pipeline against live upcoming Premier League data instead of the curated fixture set.
 - The web UI uses that same fixture snapshot to show routeable clusters, default routing outcomes, and a browser-based order simulator.
 - `make verify` exercises the CLI path without needing the browser.
 - `make list-clusters ROUTEABLE_ONLY=1` is the CLI discovery step before routing a specific order.
 - `make route-order ...` reloads that same fixture state and looks up the requested proposition cluster.
+- `make live-epl` is the batch live operator path. It fetches the current EPL slate, builds clusters, and emits one `buy_yes` plus one `sell_yes` marketable routing simulation for each live routeable proposition cluster.
 - For `buy_yes`, the executable price is `yes_ask`, and it must be less than or equal to the order limit.
 - For `sell_yes`, the executable price is `yes_bid`, and it must be greater than or equal to the order limit.
 - The router discards non-executable venues, then ranks feasible venues by price closeness to the limit plus available depth.
@@ -122,3 +137,8 @@ The fixture artifacts include labels for:
 - No production-grade UI.
 - Routeable family restricted to simple binary yes/no only.
 - Unsupported/ambiguous markets are surfaced, not forced into routeable clusters.
+
+## Suggested demo posture
+- Use `make dev` or `make verify` for the deterministic submission demo path.
+- Use `make live-epl` or `make dev-live-epl` to show that the same architecture can continuously ingest and route across the current upcoming Premier League slate.
+- If live public APIs change or thin out during the demo window, fall back to the fixture-backed path and say so explicitly.

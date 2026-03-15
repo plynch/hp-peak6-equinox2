@@ -19,7 +19,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("usage: equinox <serve|fixture-demo|list-clusters|route-order|live-inspect>")
+		fmt.Println("usage: equinox <serve|fixture-demo|list-clusters|route-order|live-inspect|live-epl>")
 		os.Exit(1)
 	}
 	switch os.Args[1] {
@@ -43,6 +43,10 @@ func main() {
 		if err := runLiveInspect(); err != nil {
 			panic(err)
 		}
+	case "live-epl":
+		if err := runLivePremierLeague(); err != nil {
+			panic(err)
+		}
 	default:
 		fmt.Println("unknown command")
 		os.Exit(1)
@@ -52,9 +56,11 @@ func main() {
 func runServe() error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:8080", "server bind address")
+	source := fs.String("source", "fixture", "snapshot source: fixture or live-epl")
+	eventLimit := fs.Int("event-limit", 20, "maximum upcoming live EPL events to fetch per venue")
 	_ = fs.Parse(os.Args[2:])
 
-	snapshot, err := demo.LoadFixtureSnapshot()
+	snapshot, err := loadSnapshotForSource(*source, *eventLimit)
 	if err != nil {
 		return err
 	}
@@ -63,12 +69,13 @@ func runServe() error {
 		return err
 	}
 
-	app, err := web.New(snapshot)
+	app, err := web.New(snapshot, *source)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Equinox demo UI available at http://%s\n", *addr)
+	fmt.Printf("source: %s\n", *source)
 	fmt.Printf("artifact: %s\n", snapshot.ArtifactPath)
 	fmt.Println("press Ctrl+C to stop")
 
@@ -177,6 +184,28 @@ func runLiveInspect() error {
 	return enc.Encode(out)
 }
 
+func runLivePremierLeague() error {
+	fs := flag.NewFlagSet("live-epl", flag.ExitOnError)
+	eventLimit := fs.Int("event-limit", 20, "maximum upcoming EPL events to fetch per venue")
+	_ = fs.Parse(os.Args[2:])
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	snapshot, err := demo.LoadLivePremierLeagueSnapshot(ctx, *eventLimit)
+	if err != nil {
+		return err
+	}
+	snapshot, err = demo.MaterializeSnapshot(context.Background(), "equinox.db", "artifacts", snapshot)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("live premier league snapshot complete\nartifact: %s\n\n", snapshot.ArtifactPath)
+	printLivePremierLeagueSummary(snapshot)
+	return nil
+}
+
 func printFixtureSummary(events []model.EventCluster, props []model.PropositionCluster, decisions []model.RoutingDecision) {
 	eventTitles := map[string]string{}
 	for _, event := range events {
@@ -215,6 +244,64 @@ func printFixtureSummary(events []model.EventCluster, props []model.PropositionC
 	}
 }
 
+func printLivePremierLeagueSummary(snapshot demo.Snapshot) {
+	eventTitles := map[string]string{}
+	for _, event := range snapshot.Events {
+		eventTitles[event.ClusterID] = event.Title
+	}
+
+	fmt.Printf("event clusters: %d\n", len(snapshot.Events))
+	fmt.Printf("proposition clusters: %d\n", len(snapshot.Props))
+	fmt.Printf("routeable proposition clusters: %d\n\n", countRouteable(snapshot.Props))
+
+	fmt.Println("routeable proposition clusters:")
+	foundRouteable := false
+	for _, p := range snapshot.Props {
+		if p.Routeability != model.Routeable {
+			continue
+		}
+		foundRouteable = true
+		fmt.Printf("- %s | event=%s | proposition=%s | venues=%s\n", p.ClusterID, eventTitles[p.EventClusterID], p.Proposition, joinVenues(p.MarketInstances))
+	}
+	if !foundRouteable {
+		fmt.Println("- none")
+	}
+
+	fmt.Println("\nmarketable routing outcomes:")
+	if len(snapshot.Decisions) == 0 {
+		fmt.Println("- none")
+	}
+	for _, d := range snapshot.Decisions {
+		outcome := string(d.SelectedVenue)
+		if d.Action != "route" {
+			outcome = "refuse"
+		}
+		fmt.Printf("- %s | %s @ %.2f | %s | %s\n",
+			d.Order.PropositionClusterID,
+			d.Order.Side,
+			d.Order.LimitProbability,
+			outcome,
+			strings.Join(d.Reasons, "; "),
+		)
+	}
+
+	fmt.Println("\nfor a browser demo of live EPL:")
+	fmt.Println("  make dev-live-epl LIVE_EVENT_LIMIT=20")
+}
+
+func loadSnapshotForSource(source string, eventLimit int) (demo.Snapshot, error) {
+	switch source {
+	case "fixture":
+		return demo.LoadFixtureSnapshot()
+	case "live-epl":
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return demo.LoadLivePremierLeagueSnapshot(ctx, eventLimit)
+	default:
+		return demo.Snapshot{}, fmt.Errorf("unknown source %q", source)
+	}
+}
+
 func joinVenues(instances []model.VenueMarketInstance) string {
 	seen := map[model.Venue]bool{}
 	out := make([]string, 0, len(instances))
@@ -225,6 +312,16 @@ func joinVenues(instances []model.VenueMarketInstance) string {
 		}
 	}
 	return strings.Join(out, ",")
+}
+
+func countRouteable(props []model.PropositionCluster) int {
+	count := 0
+	for _, p := range props {
+		if p.Routeability == model.Routeable {
+			count++
+		}
+	}
+	return count
 }
 
 func bestBuyLimit(prop model.PropositionCluster) (float64, bool) {

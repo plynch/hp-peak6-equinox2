@@ -88,3 +88,51 @@ func TestDerivesComparableSportsWinnerTargetsAcrossVenues(t *testing.T) {
 		t.Fatalf("expected kalshi normalized target to be liverpool win, got %q", ka[0].NormalizedYesTarget)
 	}
 }
+
+func TestCanonicalizesShortTeamNamesAcrossVenues(t *testing.T) {
+	pmRows := []polymarket.RawMarket{
+		{
+			EventID:      "pm-epl-2",
+			EventTitle:   "Nottingham Forest FC vs. Fulham FC",
+			EventFamily:  "soccer_big_five",
+			MarketID:     "pm-not",
+			Question:     "Will Nottingham Forest FC win on 2026-03-15?",
+			Category:     "sports",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "Otherwise, this market resolves to No.",
+			EndDateISO:   "2026-03-15T16:30:00Z",
+			QuoteYesAsk:  0.42,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+	}
+	kalshiRows := []kalshi.RawMarket{
+		{
+			EventID:      "k-epl-2",
+			EventTitle:   "Nottingham vs Fulham",
+			EventFamily:  "soccer_big_five",
+			MarketTicker: "KXEPLGAME-26MAR15NFOFUL-NFO",
+			Title:        "Nottingham vs Fulham Winner?",
+			YesSubTitle:  "Nottingham",
+			Category:     "sports",
+			MarketType:   "binary",
+			Outcomes:     []string{"Yes", "No"},
+			RulesText:    "Otherwise, this market resolves to No.",
+			CloseTimeISO: "2026-03-15T16:30:00Z",
+			YesAskCents:  42,
+			QuoteFreshAt: "2026-03-14T23:40:00Z",
+		},
+	}
+
+	pm := FromPolymarket(pmRows)
+	ka := FromKalshi(kalshiRows)
+	if pm[0].NormalizedYesTarget != "nottingham forest win" {
+		t.Fatalf("expected polymarket normalized target to be nottingham forest win, got %q", pm[0].NormalizedYesTarget)
+	}
+	if ka[0].NormalizedYesTarget != "nottingham forest win" {
+		t.Fatalf("expected kalshi normalized target to be nottingham forest win, got %q", ka[0].NormalizedYesTarget)
+	}
+	if pm[0].UnsupportedShape || ka[0].UnsupportedShape {
+		t.Fatalf("winner markets should not be marked unsupported when rules contain 'Otherwise'")
+	}
+}

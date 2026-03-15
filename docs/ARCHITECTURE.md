@@ -1,7 +1,7 @@
 # Architecture and Tradeoffs
 
 ## Boundaries
-- `internal/adapters/*`: venue-specific payload loading (fixture + optional live inspect).
+- `internal/adapters/*`: venue-specific payload loading (fixture, optional live inspect, and live Premier League scan).
 - `internal/normalize`: venue payload -> canonical `VenueMarketInstance`.
 - `internal/cluster`: canonical event and proposition clustering + equivalence assessments.
 - `internal/router`: route simulation from normalized proposition clusters only.
@@ -48,10 +48,11 @@ Router scoring uses normalized quote/depth fields from proposition clusters and 
 The repository now has both:
 - a CLI path for deterministic checks and artifact inspection
 - a thin local web UI for reviewer/demo usability
+- a live EPL CLI/UI mode that exercises the same architecture against current public data
 
 The web UI is intentionally not a separate product architecture. It is a thin layer over the same shared demo snapshot used by the CLI.
 
 ## Known limitations
 - Canonical key derivation remains heuristic and fixture-calibrated.
-- Live inspect path validates ingestion availability only; it does not guarantee live routeable overlaps.
+- Live EPL routeability depends on current public overlap between Polymarket and Kalshi; the fixture path remains the deterministic fallback.
 - No real execution, account logic, or fee-accurate settlement simulation.

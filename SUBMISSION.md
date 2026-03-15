@@ -11,6 +11,7 @@ This submission implements:
 - canonical proposition clustering inside events
 - venue-agnostic routing simulation
 - deterministic fixture-first demo support
+- ongoing live Premier League scan support
 - durable local persistence through a relational store boundary
 
 The current fixture corpus includes a live-style Premier League event for Liverpool vs Tottenham on Sunday, March 15, 2026 at 11:30 AM Central, modeled with three routeable cross-venue match-outcome propositions.
@@ -57,6 +58,12 @@ Optional live ingest check:
 make live-inspect LIVE_LIMIT=1
 ```
 
+Optional live Premier League scan:
+
+```bash
+make live-epl
+```
+
 To route a specific hypothetical order against the fixture state:
 
 ```bash
@@ -90,6 +97,10 @@ The PRD originally preferred PostgreSQL as the local relational store. The imple
 
 The primary reviewer path is fixture-backed because live cross-venue routeable overlaps are unstable and because the assignment is primarily evaluating architecture, decomposition, and ambiguity handling.
 
+### Live Premier League operator path
+
+The repository also includes a live EPL scan path (`make live-epl` / `make dev-live-epl`) that fetches the current upcoming slate from both venues, clusters the overlapping matches, and simulates routing across every routeable proposition cluster it finds. This is secondary to the deterministic fixture path, but it demonstrates that the same architecture can operate continuously on current public data.
+
 ### Curated versus derived fixture behavior
 
 Fixtures remain curated for deterministic demo quality, but the primary fixture path derives meaningful normalization behavior in code, including:
@@ -109,7 +120,7 @@ Still curated in fixtures:
 ## Known Limitations
 
 - Clustering remains heuristic and fixture-calibrated.
-- The live-inspect path validates public ingestion availability only; it does not guarantee live routeable overlaps.
+- Live routeability depends on current public overlap and market availability between Polymarket and Kalshi.
 - The prototype does not model fees, settlement economics, execution risk, or real-money trading.
 - Only simple binary yes or no propositions are treated as routeable in the MVP.
 

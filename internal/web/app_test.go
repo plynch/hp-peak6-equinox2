@@ -15,7 +15,7 @@ func TestIndexRendersAndRoutesOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load snapshot: %v", err)
 	}
-	app, err := New(snapshot)
+	app, err := New(snapshot, "fixture")
 	if err != nil {
 		t.Fatalf("new app: %v", err)
 	}

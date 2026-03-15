@@ -19,6 +19,7 @@ var templateFS embed.FS
 
 type App struct {
 	snapshot demo.Snapshot
+	source   string
 	tmpl     *template.Template
 }
 
@@ -29,6 +30,8 @@ type routeResult struct {
 
 type viewData struct {
 	Snapshot          demo.Snapshot
+	SourceLabel       string
+	SourceDescription string
 	RouteableCount    int
 	RouteableClusters []model.PropositionCluster
 	EvaluationRows    []evaluationRow
@@ -45,7 +48,7 @@ type evaluationRow struct {
 	ID    string
 }
 
-func New(snapshot demo.Snapshot) (*App, error) {
+func New(snapshot demo.Snapshot, source string) (*App, error) {
 	funcs := template.FuncMap{
 		"join":        strings.Join,
 		"joinVenues":  joinVenues,
@@ -55,7 +58,7 @@ func New(snapshot demo.Snapshot) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &App{snapshot: snapshot, tmpl: tmpl}, nil
+	return &App{snapshot: snapshot, source: source, tmpl: tmpl}, nil
 }
 
 func (a *App) Handler() http.Handler {
@@ -72,6 +75,8 @@ func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 	defaultCluster, defaultLimit := defaultRoute(a.snapshot.Props)
 	data := viewData{
 		Snapshot:          a.snapshot,
+		SourceLabel:       sourceLabel(a.source),
+		SourceDescription: sourceDescription(a.source),
 		RouteableCount:    countRouteable(a.snapshot.Props),
 		RouteableClusters: sortedRouteableProps(a.snapshot.Props),
 		EvaluationRows:    sortedEvaluationRows(a.snapshot.Evaluation),
@@ -236,4 +241,22 @@ func bestBuyLimit(prop model.PropositionCluster) (float64, bool) {
 		}
 	}
 	return best, found
+}
+
+func sourceLabel(source string) string {
+	switch source {
+	case "live-epl":
+		return "Live Premier League"
+	default:
+		return "Fixture snapshot"
+	}
+}
+
+func sourceDescription(source string) string {
+	switch source {
+	case "live-epl":
+		return "This local UI is backed by a live Premier League snapshot fetched from the current public Polymarket and Kalshi APIs."
+	default:
+		return "This local UI is fixture-backed for deterministic review and is built on the same Go engine as the CLI."
+	}
 }
