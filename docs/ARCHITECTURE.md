@@ -16,6 +16,12 @@
 3. Attach venue market instances beneath proposition clusters.
 4. Route only if proposition cluster is route-safe.
 
+## Live EPL fetch policy
+- The live Premier League operator path fetches the current plus next few matchweek-style windows, not an arbitrary fixed number of matches.
+- The public Polymarket and Kalshi APIs do not expose a stable official EPL matchweek field, so the implementation infers matchweek-style windows from upcoming fixture dates.
+- A new window begins when the gap between consecutive fixture dates exceeds 72 hours.
+- The default lookahead is 4 windows, bounded by whatever open markets the public APIs currently expose.
+
 ## Normalization posture (focused repair pass)
 The primary fixture path now derives key semantic fields in code from venue-style source fields instead of copying pre-labeled normalized fields:
 - proposition text normalization from question/title,

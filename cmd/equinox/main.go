@@ -57,10 +57,10 @@ func runServe() error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:8080", "server bind address")
 	source := fs.String("source", "fixture", "snapshot source: fixture or live-epl")
-	eventLimit := fs.Int("event-limit", 20, "maximum upcoming live EPL events to fetch per venue")
+	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch when source=live-epl")
 	_ = fs.Parse(os.Args[2:])
 
-	snapshot, err := loadSnapshotForSource(*source, *eventLimit)
+	snapshot, err := loadSnapshotForSource(*source, *matchweeks)
 	if err != nil {
 		return err
 	}
@@ -186,13 +186,13 @@ func runLiveInspect() error {
 
 func runLivePremierLeague() error {
 	fs := flag.NewFlagSet("live-epl", flag.ExitOnError)
-	eventLimit := fs.Int("event-limit", 20, "maximum upcoming EPL events to fetch per venue")
+	matchweeks := fs.Int("matchweeks", 4, "number of current/upcoming EPL matchweek-style windows to fetch")
 	_ = fs.Parse(os.Args[2:])
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	snapshot, err := demo.LoadLivePremierLeagueSnapshot(ctx, *eventLimit)
+	snapshot, err := demo.LoadLivePremierLeagueSnapshot(ctx, *matchweeks)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func runLivePremierLeague() error {
 	}
 
 	fmt.Printf("live premier league snapshot complete\nartifact: %s\n\n", snapshot.ArtifactPath)
-	printLivePremierLeagueSummary(snapshot)
+	printLivePremierLeagueSummary(snapshot, *matchweeks)
 	return nil
 }
 
@@ -244,7 +244,7 @@ func printFixtureSummary(events []model.EventCluster, props []model.PropositionC
 	}
 }
 
-func printLivePremierLeagueSummary(snapshot demo.Snapshot) {
+func printLivePremierLeagueSummary(snapshot demo.Snapshot, matchweeks int) {
 	eventTitles := map[string]string{}
 	for _, event := range snapshot.Events {
 		eventTitles[event.ClusterID] = event.Title
@@ -286,17 +286,17 @@ func printLivePremierLeagueSummary(snapshot demo.Snapshot) {
 	}
 
 	fmt.Println("\nfor a browser demo of live EPL:")
-	fmt.Println("  make dev-live-epl LIVE_EVENT_LIMIT=20")
+	fmt.Printf("  make dev-live-epl LIVE_MATCHWEEKS=%d\n", matchweeks)
 }
 
-func loadSnapshotForSource(source string, eventLimit int) (demo.Snapshot, error) {
+func loadSnapshotForSource(source string, matchweeks int) (demo.Snapshot, error) {
 	switch source {
 	case "fixture":
 		return demo.LoadFixtureSnapshot()
 	case "live-epl":
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		return demo.LoadLivePremierLeagueSnapshot(ctx, eventLimit)
+		return demo.LoadLivePremierLeagueSnapshot(ctx, matchweeks)
 	default:
 		return demo.Snapshot{}, fmt.Errorf("unknown source %q", source)
 	}

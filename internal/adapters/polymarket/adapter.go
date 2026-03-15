@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"sort"
 	"time"
+
+	"equinox/internal/schedule"
 )
 
 type RawMarket struct {
@@ -86,7 +88,7 @@ func (a Adapter) LiveInspect(ctx context.Context, limit int) ([]RawMarket, error
 	return results, nil
 }
 
-func (a Adapter) LivePremierLeague(ctx context.Context, eventLimit int) ([]RawMarket, error) {
+func (a Adapter) LivePremierLeague(ctx context.Context, matchweekLimit int) ([]RawMarket, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://gamma-api.polymarket.com/events?tag_slug=premier-league&closed=false&limit=200", nil)
 	if err != nil {
 		return nil, err
@@ -129,9 +131,12 @@ func (a Adapter) LivePremierLeague(ctx context.Context, eventLimit int) ([]RawMa
 		}
 		return ti.Before(*tj)
 	})
-	if eventLimit > 0 && len(filtered) > eventLimit {
-		filtered = filtered[:eventLimit]
-	}
+	filtered = schedule.KeepUpcomingWindows(filtered, func(event liveEvent) *time.Time {
+		if len(event.Markets) == 0 {
+			return nil
+		}
+		return parseTime(event.Markets[0].EndDate)
+	}, matchweekLimit, 72*time.Hour)
 
 	results := make([]RawMarket, 0, len(filtered)*3)
 	for _, event := range filtered {

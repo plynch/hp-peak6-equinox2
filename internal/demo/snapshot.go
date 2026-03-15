@@ -63,12 +63,12 @@ func LoadFixtureSnapshot() (Snapshot, error) {
 	}, nil
 }
 
-func LoadLivePremierLeagueSnapshot(ctx context.Context, eventLimit int) (Snapshot, error) {
-	pmRows, err := (polymarket.Adapter{}).LivePremierLeague(ctx, eventLimit)
+func LoadLivePremierLeagueSnapshot(ctx context.Context, matchweekLimit int) (Snapshot, error) {
+	pmRows, err := (polymarket.Adapter{}).LivePremierLeague(ctx, matchweekLimit)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	kRows, err := (kalshi.Adapter{}).LivePremierLeague(ctx, eventLimit)
+	kRows, err := (kalshi.Adapter{}).LivePremierLeague(ctx, matchweekLimit)
 	if err != nil {
 		return Snapshot{}, err
 	}

@@ -50,6 +50,8 @@ For the live Premier League browser demo:
 make dev-live-epl
 ```
 
+By default, the live EPL path uses the current plus next 4 matchweek-style windows that can be inferred from the public APIs.
+
 To see the available operator commands:
 
 ```bash
@@ -70,7 +72,7 @@ Outputs:
 - `make`
   - Prints the supported demo and operator targets.
 - `make live-epl`
-  - Fetches the current upcoming Premier League slate from both venues, builds live event/proposition clusters, and simulates routing across every routeable proposition cluster it finds.
+  - Fetches the current plus next 4 upcoming Premier League matchweek-style windows from both venues, builds live event/proposition clusters, and simulates routing across every routeable proposition cluster it finds.
 - `make list-clusters ROUTEABLE_ONLY=1`
   - Lists the currently routeable proposition clusters so you can choose an explicit target for routing.
 - `go run ./cmd/equinox fixture-demo`
@@ -99,6 +101,7 @@ Outputs:
   - `prop-008`: `liverpool win` for `Liverpool vs Tottenham`
   - `prop-009`: `tottenham win` for `Liverpool vs Tottenham`
 - In the live EPL scan, routeable clusters are discovered dynamically from the current upcoming slate and can include many matched match-outcome propositions across both venues.
+- If the public APIs expose fewer than 4 upcoming matchweek-style windows, the live scan returns whatever overlap is currently available.
 - The router refuses:
   - unsupported clusters
   - ambiguous clusters
@@ -108,11 +111,13 @@ Outputs:
 ## How Routing Works
 - `make dev` loads fixture state, normalizes venue records, builds event clusters, then proposition clusters, writes the local artifact and SQLite state, and starts the web UI.
 - `make dev-live-epl` runs that same pipeline against live upcoming Premier League data instead of the curated fixture set.
+- For EPL, the live path groups fixtures into matchweek-style windows by date gaps because the public APIs expose match dates reliably but do not expose a stable official matchweek field.
 - The web UI uses that same fixture snapshot to show routeable clusters, default routing outcomes, and a browser-based order simulator.
 - `make verify` exercises the CLI path without needing the browser.
 - `make list-clusters ROUTEABLE_ONLY=1` is the CLI discovery step before routing a specific order.
 - `make route-order ...` reloads that same fixture state and looks up the requested proposition cluster.
 - `make live-epl` is the batch live operator path. It fetches the current EPL slate, builds clusters, and emits one `buy_yes` plus one `sell_yes` marketable routing simulation for each live routeable proposition cluster.
+- Use `LIVE_MATCHWEEKS=<n>` to widen or narrow the live EPL lookahead if you want fewer or more upcoming windows.
 - For `buy_yes`, the executable price is `yes_ask`, and it must be less than or equal to the order limit.
 - For `sell_yes`, the executable price is `yes_bid`, and it must be greater than or equal to the order limit.
 - The router discards non-executable venues, then ranks feasible venues by price closeness to the limit plus available depth.
@@ -141,4 +146,5 @@ The fixture artifacts include labels for:
 ## Suggested demo posture
 - Use `make dev` or `make verify` for the deterministic submission demo path.
 - Use `make live-epl` or `make dev-live-epl` to show that the same architecture can continuously ingest and route across the current upcoming Premier League slate.
+- The default live EPL lookahead is the current plus next 4 matchweek-style windows, bounded by what the current public APIs actually have open.
 - If live public APIs change or thin out during the demo window, fall back to the fixture-backed path and say so explicitly.

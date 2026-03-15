@@ -99,7 +99,7 @@ The primary reviewer path is fixture-backed because live cross-venue routeable o
 
 ### Live Premier League operator path
 
-The repository also includes a live EPL scan path (`make live-epl` / `make dev-live-epl`) that fetches the current upcoming slate from both venues, clusters the overlapping matches, and simulates routing across every routeable proposition cluster it finds. This is secondary to the deterministic fixture path, but it demonstrates that the same architecture can operate continuously on current public data.
+The repository also includes a live EPL scan path (`make live-epl` / `make dev-live-epl`) that fetches the current plus next few upcoming matchweek-style windows from both venues, clusters the overlapping matches, and simulates routing across every routeable proposition cluster it finds. This is secondary to the deterministic fixture path, but it demonstrates that the same architecture can operate continuously on current public data.
 
 ### Curated versus derived fixture behavior
 
@@ -121,6 +121,7 @@ Still curated in fixtures:
 
 - Clustering remains heuristic and fixture-calibrated.
 - Live routeability depends on current public overlap and market availability between Polymarket and Kalshi.
+- The public APIs do not expose a stable official EPL matchweek field, so the live scan infers matchweek-style windows from fixture dates.
 - The prototype does not model fees, settlement economics, execution risk, or real-money trading.
 - Only simple binary yes or no propositions are treated as routeable in the MVP.
 
