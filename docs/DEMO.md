@@ -5,15 +5,24 @@
 If you are filming on the morning of Sunday, March 15, 2026 before the Liverpool vs Tottenham Premier League match at 11:30 AM Central, use this order:
 
 1. `make scan SOURCE=live-epl LIVE_MATCHWEEKS=1`
-2. call out that the live public APIs currently show a routeable Liverpool vs Tottenham event cluster for the same-day match
-3. optionally run:
+2. say the concrete user story out loud:
+   - "It is Sunday morning, March 15, 2026."
+   - "Liverpool vs Tottenham is later today at 11:30 AM Central."
+   - "I want to place a hypothetical $77 bet on Liverpool to win."
+   - "I am going to use Equinox to make a routing decision for that order."
+3. call out that the live public APIs currently show a routeable Liverpool vs Tottenham event cluster for the same-day match
+4. optionally run:
    - `make list-clusters ROUTEABLE_ONLY=1 SOURCE=live-epl LIVE_MATCHWEEKS=1`
-   - `make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=1000`
-4. then switch to the deterministic path with `make dev`
+   - `make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=77`
+5. then switch to the deterministic path with `make dev`
 
 That gives you an organic live discovery moment first, then a stable demo path second.
 
 If the live slate or venue overlap changes before filming, fall back to `make dev` immediately and say the deterministic fixture path is the primary reviewer path.
+
+## Recommended one-sentence framing
+
+> "I want to place a hypothetical $77 Liverpool win order on the morning of Sunday, March 15, 2026, and I’m using Equinox to figure out which venue currently offers the best executable routing outcome."
 
 ## 1) Start the deterministic local demo
 ```bash
@@ -111,9 +120,13 @@ That command is useful right after `make scan SOURCE=live-epl LIVE_MATCHWEEKS=1`
 - Confirm that the default `buy_yes` order routes to `Polymarket`.
 - Change to `sell_yes` with limit `0.58` on the Fed cluster and confirm it routes to `Kalshi`.
 - Switch to the Liverpool vs Tottenham event, scheduled for Sunday, March 15, 2026 at 11:30 AM Central.
-- Confirm that the `draw` proposition at limit `0.15` routes to `Kalshi`.
-- Confirm that the `liverpool win` proposition at limit `0.76` routes to `Polymarket`.
-- Confirm that the `tottenham win` proposition at limit `0.10` routes to `Polymarket`.
+- In the order form, set the order size to `77`.
+- Keep the side as `buy_yes`.
+- Set the limit to `0.76`.
+- Choose the `liverpool win` proposition.
+- Use the app to make the routing decision for that hypothetical $77 order.
+- Confirm that the current routing decision goes to `Polymarket`.
+- Optionally switch to `draw` at limit `0.15` and show that the current routing decision goes to `Kalshi`.
 
 ## 6) Run checks from the CLI
 ```bash
@@ -132,12 +145,12 @@ You can also try:
 ```bash
 make route-order CLUSTER=prop-001 SIDE=sell_yes LIMIT=0.58 SIZE=1000
 make route-order CLUSTER=prop-007 SIDE=buy_yes LIMIT=0.15 SIZE=1000
-make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76 SIZE=1000
+make route-order CLUSTER=prop-008 SIDE=buy_yes LIMIT=0.76 SIZE=77
 make route-order CLUSTER=prop-009 SIDE=buy_yes LIMIT=0.10 SIZE=1000
 make route-order EVENT_QUERY='fomc march 2026' PROP_QUERY='fed hike rate march meeting' LIMIT=0.60 SIZE=1000
-make route-order EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=1000
-make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='draw' LIMIT=0.15 SIZE=1000
-make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=1000
+make route-order EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=77
+make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='draw' LIMIT=0.15 SIZE=77
+make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=77
 ```
 
 The selector-based form is better for the terminal demo because it does not rely on internal `prop-00x` ids.
@@ -147,11 +160,10 @@ For the Sunday, March 15, 2026 filmed demo, the strongest live terminal sequence
 
 ```bash
 make scan SOURCE=live-epl LIVE_MATCHWEEKS=1
-make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='draw' LIMIT=0.15 SIZE=1000
-make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=1000
+make route-order SOURCE=live-epl LIVE_MATCHWEEKS=1 EVENT_QUERY='liverpool vs tottenham' PROP_QUERY='liverpool win' LIMIT=0.76 SIZE=77
 ```
 
-That sequence looks organic because the event is discovered from current public data first, then routed from the terminal second.
+That sequence looks organic because the event is discovered from current public data first, then the $77 Liverpool win order is routed from the terminal second.
 
 ## 8) Inspect artifact
 ```bash
@@ -171,6 +183,7 @@ While presenting, call out:
 - `evaluation_labels.clear_non_match_case` points to an `explicit_non_match` assessment (paired cross-venue rejection), not just a single-member cluster fallback.
 - `route-order` only works for proposition clusters marked `routeable`.
 - `route-order` can resolve by human-readable event and proposition selectors, which is the cleaner demo path in the terminal.
+- For the filmed sports story, the concrete hypothetical order is: `buy_yes`, `liverpool win`, `limit=0.76`, `size=77`, on Sunday, March 15, 2026 before kickoff.
 - In the current fixture corpus, there are currently five routeable proposition clusters:
   - `prop-001` for the Fed hike proposition
   - `prop-004` for the Liverpool-Arsenal both-teams-to-score proposition
